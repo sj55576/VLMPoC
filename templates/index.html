@@ -1,1 +1,88 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VLM SOP Monitor</title><link rel="stylesheet" href="/static/app.css"></head><body><header><h1>VLM SOP Monitor</h1><div><select id="sop"><option value="example_assembly">Example Assembly</option></select><button id="start">カメラ開始</button><button id="upload">動画アップロード</button><button id="pause">一時停止</button><button id="reset">セッションリセット</button><button id="stop">停止</button><button id="vlm">VLM手動実行</button><a href="/api/events/download">ログダウンロード</a></div></header><main><section class="video"><canvas id="canvas" width="640" height="480"></canvas><p id="metrics">FPS: - / 推論: - / VLM: 0</p></section><section><h2>現在の工程</h2><pre id="current">未開始</pre><h2>工程一覧</h2><ol id="steps"></ol><h2>VLM解析結果</h2><pre id="vlm-result">-</pre></section><section><h2>判定根拠・イベント</h2><pre id="events">-</pre></section></main><input id="video" type="file" accept="video/*" hidden><script src="/static/app.js"></script></body></html>
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VLM SOP Monitor</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">LOCAL VISION · SOP COMPLIANCE</p>
+      <h1>VLM SOP Monitor</h1>
+    </div>
+    <div class="connection" aria-live="polite">
+      <span id="connection-dot" class="connection-dot offline"></span>
+      <span id="connection-status">接続を準備中</span>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <section class="panel controls" aria-label="操作">
+      <label class="field">SOP
+        <select id="sop" aria-label="SOPを選択"><option value="example_assembly">Example Assembly</option></select>
+      </label>
+      <div class="button-row">
+        <button id="start" class="primary">カメラ開始</button>
+        <button id="upload">動画アップロード</button>
+        <button id="pause" disabled>一時停止</button>
+        <button id="stop" class="danger" disabled>停止</button>
+      </div>
+      <div class="button-row utility-row">
+        <button id="reset">セッションリセット</button>
+        <button id="vlm">VLM手動実行</button>
+        <a class="button-link" href="/api/events/download">ログダウンロード</a>
+      </div>
+      <p id="upload-status" class="hint" aria-live="polite">カメラまたは動画を選択してください。</p>
+    </section>
+
+    <section class="panel viewer" aria-label="解析映像">
+      <div class="panel-heading">
+        <h2>ライブ解析</h2>
+        <span id="source-badge" class="badge">待機中</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="canvas" width="640" height="480" aria-label="物体検出と姿勢推定の結果"></canvas>
+        <div id="canvas-empty" class="canvas-empty">カメラを開始するか、動画をアップロードしてください</div>
+      </div>
+      <dl class="metrics" aria-label="処理メトリクス">
+        <div><dt>FPS</dt><dd id="metric-fps">—</dd></div>
+        <div><dt>推論時間</dt><dd id="metric-inference">—</dd></div>
+        <div><dt>VLM呼出</dt><dd id="metric-vlm">0</dd></div>
+        <div><dt>最終更新</dt><dd id="metric-time">—</dd></div>
+      </dl>
+      <p id="metrics" class="sr-only" aria-live="polite"></p>
+    </section>
+
+    <section class="panel current-step" aria-label="現在の工程">
+      <div class="panel-heading"><h2>現在の工程</h2><span id="progress-label" class="badge">0%</span></div>
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-bar" class="progress-fill"></div></div>
+      <p id="step-name" class="step-name">セッション未開始</p>
+      <p id="step-description" class="muted">SOPを選択して開始してください。</p>
+      <div id="condition-result" class="condition muted">判定根拠を待機中</div>
+    </section>
+
+    <section class="panel steps-panel" aria-label="工程一覧">
+      <div class="panel-heading"><h2>工程一覧</h2><span id="step-count" class="muted">0 / 0</span></div>
+      <ol id="steps" class="steps-list"></ol>
+    </section>
+
+    <section class="panel vlm-panel" aria-label="VLM解析結果">
+      <div class="panel-heading"><h2>VLM解析結果</h2><span id="vlm-status" class="badge">待機中</span></div>
+      <p id="vlm-summary" class="vlm-summary">VLM解析は必要なタイミング、または手動実行時に行われます。</p>
+      <dl id="vlm-details" class="detail-grid"></dl>
+      <div id="vlm-evidence" class="evidence-list"></div>
+      <details><summary>生データ</summary><pre id="vlm-result">—</pre></details>
+    </section>
+
+    <section class="panel events-panel" aria-label="イベント履歴">
+      <div class="panel-heading"><h2>判定根拠・イベント</h2><button id="refresh-events" class="icon-button" title="イベントを更新" aria-label="イベントを更新">↻</button></div>
+      <div id="events" class="events-list"><p class="muted">イベントはまだありません。</p></div>
+    </section>
+  </main>
+
+  <input id="video" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-msvideo" hidden>
+  <script src="/static/app.js"></script>
+</body>
+</html>
