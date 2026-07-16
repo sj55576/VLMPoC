@@ -1,0 +1,9 @@
+services:
+  vlm-sop-monitor:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      APP_MODE: mock
+      VLM_PROVIDER: mock
+    volumes:
+      - ./data:/app/data

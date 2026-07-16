@@ -1,0 +1,29 @@
+app:
+  name: VLM SOP Monitor
+  mode: mock
+  host: 0.0.0.0
+  port: 8000
+vision:
+  device: auto
+  detection_model_path: ""
+  pose_model_path: ""
+  detection_confidence: 0.40
+  pose_confidence: 0.40
+  tracker_iou_threshold: 0.25
+  frame_queue_size: 4
+  missing_tolerance_seconds: 1.0
+vlm:
+  provider: mock
+  model: ""
+  base_url: ""
+  api_key: ""
+  interval_seconds: 5
+  max_images: 4
+storage:
+  database_url: sqlite:///./data/app.db
+  save_event_frames: true
+  save_all_frames: false
+  retention_days: 30
+security:
+  max_upload_mb: 100
+  allowed_video_extensions: [".mp4", ".avi", ".mov", ".mkv"]

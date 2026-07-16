@@ -1,0 +1,66 @@
+sop:
+  id: example_assembly
+  name: Example Assembly Process
+  version: "1.0"
+objects:
+  required: [person, helmet, screwdriver, part_a, screw, completed_box]
+steps:
+  - id: step_01
+    name: PPE確認
+    description: 作業者がヘルメットを着用している
+    conditions:
+      all:
+        - type: object_near_body_part
+          object: helmet
+          body_part: nose
+          max_distance: 0.25
+        - type: object_present
+          object: person
+    minimum_duration_seconds: 1.0
+    timeout_seconds: 30
+    on_success: step_02
+  - id: step_02
+    name: 工具取得
+    description: 作業者がドライバーを取得する
+    conditions:
+      any:
+        - type: object_near_body_part
+          object: screwdriver
+          body_part: left_wrist
+          max_distance: 0.15
+        - type: object_near_body_part
+          object: screwdriver
+          body_part: right_wrist
+          max_distance: 0.15
+    minimum_duration_seconds: 0.5
+    timeout_seconds: 30
+    on_success: step_03
+  - id: step_03
+    name: 部品締結
+    description: ドライバーを使用して部品Aにネジを取り付ける
+    conditions:
+      all:
+        - type: object_present
+          object: part_a
+        - type: hand_object_interaction
+          hand_object: screwdriver
+          target_object: part_a
+          max_distance: 0.20
+        - type: vlm_confirmation
+          question: 作業者はドライバーを使用して部品Aを締結していますか
+    minimum_duration_seconds: 2.0
+    timeout_seconds: 60
+    on_success: step_04
+  - id: step_04
+    name: 完成品配置
+    description: 完成品を完了エリアに配置する
+    conditions:
+      all:
+        - type: object_inside_region
+          object: part_a
+          region: completed_area
+    minimum_duration_seconds: 1.0
+    timeout_seconds: 30
+    terminal: true
+regions:
+  completed_area: {x1: 0.70, y1: 0.60, x2: 0.98, y2: 0.98}

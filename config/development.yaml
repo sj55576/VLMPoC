@@ -1,0 +1,4 @@
+app:
+  mode: mock
+vision:
+  missing_tolerance_seconds: 1.5
