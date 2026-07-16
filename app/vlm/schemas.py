@@ -20,10 +20,12 @@ class VLMResponse(BaseModel):
     violations: list[str] = Field(default_factory=list)
     evidence: list[VLMEvidence] = Field(default_factory=list)
     uncertainties: list[str] = Field(default_factory=list)
+    provider_success: bool = True
+    error_message: str | None = None
 
 
 def unknown_response(reason: str) -> VLMResponse:
-    return VLMResponse(scene_summary="VLM analysis unavailable", step_status="UNKNOWN", confidence=0.0, uncertainties=[reason])
+    return VLMResponse(scene_summary="VLM analysis unavailable", step_status="UNKNOWN", confidence=0.0, uncertainties=[reason], provider_success=False, error_message=reason)
 
 
 def parse_vlm_response(value: str | dict[str, Any]) -> VLMResponse:
