@@ -4,8 +4,23 @@ import math
 from .models import Keypoint
 
 
+def sanitize_bbox(bbox: tuple[float, float, float, float]) -> tuple[float, float, float, float] | None:
+    """Return a finite, ordered box or ``None`` when the input is unusable."""
+    if len(bbox) != 4 or not all(math.isfinite(value) for value in bbox):
+        return None
+    x1, y1, x2, y2 = bbox
+    x1, x2 = min(x1, x2), max(x1, x2)
+    y1, y2 = min(y1, y2), max(y1, y2)
+    if x1 == x2 or y1 == y2:
+        return None
+    return x1, y1, x2, y2
+
+
 def iou(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
     """Return intersection over union for x1,y1,x2,y2 rectangles."""
+    a, b = sanitize_bbox(a), sanitize_bbox(b)
+    if a is None or b is None:
+        return 0.0
     ix1, iy1, ix2, iy2 = max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3])
     inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
     union = (a[2]-a[0])*(a[3]-a[1]) + (b[2]-b[0])*(b[3]-b[1]) - inter
