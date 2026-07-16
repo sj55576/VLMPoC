@@ -1,6 +1,6 @@
 """FastAPI entrypoint for the local SOP monitor."""
 from __future__ import annotations
-import asyncio, csv, io, tempfile
+import csv, io, json, tempfile
 from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -8,7 +8,6 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import load_settings
 from app.core.logging import configure_logging
 from app.services.session import SessionService
-from app.sop.loader import load_sop
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,14 +25,18 @@ def create_app() -> FastAPI:
         safe = settings.model_dump(); safe["vlm"]["api_key"] = "***" if safe["vlm"]["api_key"] else ""; return safe
 
     @app.get("/api/sops")
-    async def sops(): return [{"id":service.sop.sop.id,"name":service.sop.sop.name,"version":service.sop.sop.version}]
+    async def sops(): return service.list_sops()
 
     @app.post("/api/sops/reload")
-    async def reload_sop(): service.sop = load_sop(ROOT / "sop" / "example_assembly.yaml"); return {"status":"reloaded","id":service.sop.sop.id}
+    async def reload_sop(): return {"status":"reloaded","sops":service.reload_sops()}
 
     @app.post("/api/session/start")
     async def start(payload: dict | None = None):
-        payload = payload or {}; return service.start(payload.get("source_type","mock"), payload.get("source_name","synthetic"))
+        payload = payload or {}
+        try:
+            return service.start(payload.get("source_type", "mock"), payload.get("source_name", "synthetic"), payload.get("sop_id"))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @app.post("/api/session/stop")
     async def stop(): return service.stop()
@@ -91,8 +94,13 @@ def create_app() -> FastAPI:
     @app.get("/api/stream")
     async def stream():
         async def events():
-            while True:
-                payload = await service.process_mock_frame(); yield f"data: {payload}\n\n"; await asyncio.sleep(.1)
+            queue = service.subscribe_stream()
+            service.ensure_runner()
+            try:
+                while True:
+                    yield f"data: {json.dumps(await queue.get(), ensure_ascii=False)}\n\n"
+            finally:
+                service.unsubscribe_stream(queue)
         return StreamingResponse(events(), media_type="text/event-stream")
 
     @app.get("/api/events/download")
@@ -103,11 +111,10 @@ def create_app() -> FastAPI:
 
     @app.websocket("/api/ws")
     async def websocket(ws: WebSocket):
-        await ws.accept(); service.subscribers.add(ws)
+        await ws.accept(); service.subscribers.add(ws); service.ensure_runner()
         try:
             while True:
-                try: await asyncio.wait_for(ws.receive_text(), timeout=.2)
-                except TimeoutError: await service.process_mock_frame()
+                await ws.receive_text()
         except WebSocketDisconnect: service.subscribers.discard(ws)
 
     @app.get("/", response_class=HTMLResponse)
