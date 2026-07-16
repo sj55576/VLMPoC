@@ -26,6 +26,7 @@ class VisionSettings(BaseModel):
     tracker_iou_threshold: float = 0.25
     frame_queue_size: int = 4
     missing_tolerance_seconds: float = 1.0
+    class_aliases: dict[str, str] = Field(default_factory=dict)
 
 
 class VLMSettings(BaseModel):
