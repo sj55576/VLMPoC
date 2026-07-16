@@ -1,6 +1,6 @@
 """FastAPI entrypoint for the local SOP monitor."""
 from __future__ import annotations
-import asyncio, csv, io
+import asyncio, csv, io, tempfile
 from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -57,8 +57,13 @@ def create_app() -> FastAPI:
     async def analyze_image(file: UploadFile = File(...)):
         if file.size and file.size > settings.security.max_upload_mb * 1024 * 1024: raise HTTPException(413, "file too large")
         if not (file.content_type or "").startswith("image/"): raise HTTPException(415, "only image uploads are accepted")
-        await file.read()  # bytes intentionally not logged or persisted in the mock path
-        return await service.process_mock_frame()
+        import cv2
+        import numpy as np
+        raw = await file.read()
+        frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        if frame is None: raise HTTPException(422, "invalid image data")
+        frame = cv2.resize(frame, (640, 480))
+        return await service.process_mock_frame(frame=frame)
 
     @app.post("/api/analyze/video")
     async def analyze_video(file: UploadFile = File(...)):
@@ -66,8 +71,18 @@ def create_app() -> FastAPI:
         if suffix not in settings.security.allowed_video_extensions: raise HTTPException(415, "unsupported video format")
         data = await file.read()
         if len(data) > settings.security.max_upload_mb * 1024 * 1024: raise HTTPException(413, "file too large")
-        # Keep uploads out of paths; mock mode processes a deterministic timeline.
-        results = [await service.process_mock_frame() for _ in range(60)]
+        import cv2
+        # A randomized temporary path prevents path traversal and avoids trusting the upload name.
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as temporary:
+            temporary.write(data); temporary.flush()
+            capture = cv2.VideoCapture(temporary.name)
+            results = []
+            while len(results) < 600:
+                ok, frame = capture.read()
+                if not ok: break
+                results.append(await service.process_mock_frame(frame=cv2.resize(frame, (640, 480))))
+            capture.release()
+        if not results: raise HTTPException(422, "unable to decode video")
         return {"frames_processed":len(results),"last":results[-1]}
 
     @app.post("/api/vlm/analyze")
