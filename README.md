@@ -85,6 +85,17 @@ VLM_PROVIDER=openai_compatible VLM_MODEL=... VLM_BASE_URL=https://... VLM_API_KE
 
 `VLM_PROVIDER=mock|openai_compatible|local`で切替できます。APIキーはログや`/api/config`に露出しません。Transformersはモデル固有のchat template差異が大きいため、`app/vlm/local_provider.py`にデプロイ対象モデルのアダプターを追加してください。安全上重要な判定はVLM単独では確定しません。
 
+実検出のラベルをSOPの物体名へ対応付けるには、`config/default.yaml`の`vision.class_aliases`を設定します。
+
+```yaml
+vision:
+  class_aliases:
+    hard_hat: helmet
+    phillips_driver: screwdriver
+```
+
+`full` と `vision-only` は検出モデルが未設定・未配置なら起動時に明確な設定エラーを返します。`vlm-only` は空の視覚観測を使うため、モック物体検出による誤ったSOP完了を発生させません。
+
 ```mermaid
 sequenceDiagram
   participant F as Frame
