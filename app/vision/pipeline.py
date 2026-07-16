@@ -17,6 +17,7 @@ class VisionPipeline:
         self.detector, self.pose, self.tracker, self.engine, self.vlm = detector, pose, tracker, engine, vlm
         self.interval_seconds, self.history, self.last_vlm_at, self.vlm_calls = interval_seconds, deque(maxlen=max_history), None, 0
         self.last_vlm: dict[str, Any] | None = None
+        self.last_vlm_request: dict[str, Any] | None = None
         self.base_time = datetime.now(timezone.utc)
 
     async def process(self, frame: np.ndarray, frame_id: int, now: datetime | None = None, force_vlm: bool = False) -> tuple[Observation, Any, str | None]:
@@ -31,6 +32,7 @@ class VisionPipeline:
             current = self.engine.state.current
             request = {"timestamp": now.isoformat(), "current_step": current.model_dump() if current else None, "objects": [{"class_name":x.class_name,"track_id":x.track_id,"confidence":x.confidence,"bbox_normalized":obs.normalized_bbox(x)} for x in objects], "poses":[x.model_dump() for x in obs.poses], "candidate_events":list(candidate-prior), "recent_steps":list(self.engine.state.completed_ids())}
             response = await self.vlm.analyze([], request, {"current_step": current.model_dump() if current else {}})
+            self.last_vlm_request = request
             self.last_vlm, self.last_vlm_at, self.vlm_calls = response.model_dump(), now, self.vlm_calls+1; obs.vlm_result = self.last_vlm
         result, event = self.engine.evaluate(obs, now)
         self.history.append(obs)
