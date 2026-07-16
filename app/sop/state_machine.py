@@ -7,6 +7,7 @@ from .models import ConditionResult, SOPDefinition, StepRuntime, StepStatus
 class SOPStateMachine:
     def __init__(self, sop: SOPDefinition) -> None:
         self.sop, self.index = sop, 0
+        self._index_by_id = {step.id: index for index, step in enumerate(sop.steps)}
         self.steps = {step.id: StepRuntime(step_id=step.id) for step in sop.steps}
 
     @property
@@ -19,6 +20,8 @@ class SOPStateMachine:
         step = self.current
         if not step: return None, None
         runtime = self.steps[step.id]
+        if runtime.status in {StepStatus.COMPLETED, StepStatus.FAILED, StepStatus.SKIPPED}:
+            return runtime, None
         if runtime.status == StepStatus.PENDING:
             runtime.status, runtime.started_at = StepStatus.ACTIVE, now
         if step.timeout_seconds is not None and (now - runtime.started_at).total_seconds() >= step.timeout_seconds:
@@ -29,11 +32,23 @@ class SOPStateMachine:
             runtime.condition_true_since = runtime.condition_true_since or now
             if (now-runtime.condition_true_since).total_seconds() >= step.minimum_duration_seconds:
                 runtime.status, runtime.completed_at = StepStatus.COMPLETED, now
-                self.index += 1
+                self._advance(step)
                 return runtime, "step_completed"
         else:
             runtime.condition_true_since = None
         return runtime, None
+
+    def _advance(self, step) -> None:
+        """Follow explicit SOP edges and mark bypassed linear steps as skipped."""
+        if step.terminal:
+            self.index = len(self.sop.steps)
+            return
+        next_index = self._index_by_id.get(step.on_success, self.index + 1)
+        if next_index > self.index + 1:
+            for skipped in self.sop.steps[self.index + 1:next_index]:
+                self.steps[skipped.id].status = StepStatus.SKIPPED
+                self.steps[skipped.id].reason = f"bypassed by on_success from {step.id}"
+        self.index = next_index
 
     def completed_ids(self) -> set[str]: return {key for key, value in self.steps.items() if value.status == StepStatus.COMPLETED}
 
