@@ -38,7 +38,15 @@ class UltralyticsDetector(Detector):
         except ImportError as exc:
             raise RuntimeError("Install optional dependency: pip install '.[vision]'") from exc
         self.model: Any = YOLO(model_path)
-        self.confidence, self.device = confidence, device
+        self.confidence = confidence
+        if device == "auto":
+            try:
+                import torch
+                self.device = 0 if torch.cuda.is_available() else "cpu"
+            except ImportError:
+                self.device = "cpu"
+        else:
+            self.device = device
 
     def detect(self, frame: np.ndarray, frame_id: int) -> list[Detection]:
         result = self.model(frame, conf=self.confidence, device=self.device, verbose=False)[0]
