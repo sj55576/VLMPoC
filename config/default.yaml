@@ -12,6 +12,9 @@ vision:
   tracker_iou_threshold: 0.25
   frame_queue_size: 4
   missing_tolerance_seconds: 1.0
+  # Map detector labels to the canonical object names referenced by SOP YAML.
+  # Example: {"hard_hat": "helmet", "phillips_driver": "screwdriver"}
+  class_aliases: {}
 vlm:
   provider: mock
   model: ""
