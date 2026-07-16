@@ -17,3 +17,11 @@ def test_websocket_frame():
         client.post("/api/session/start")
         with client.websocket_connect("/api/ws") as ws:
             result=ws.receive_json(); assert result["type"]=="frame_result"
+
+
+def test_sop_catalog_and_invalid_selection():
+    app = create_app()
+    with TestClient(app) as client:
+        assert client.get("/api/sops").json()[0]["id"] == "example_assembly"
+        response = client.post("/api/session/start", json={"sop_id": "missing"})
+        assert response.status_code == 422
