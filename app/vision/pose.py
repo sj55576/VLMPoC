@@ -1,13 +1,22 @@
 """Pluggable pose estimation backends with a shared normalized representation."""
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from pathlib import Path
 import numpy as np
+from .detector import VisionConfigurationError
 from .models import Keypoint, Pose
 
 
 class PoseEstimator(ABC):
     @abstractmethod
     def estimate(self, frame: np.ndarray, frame_id: int) -> list[Pose]: ...
+
+
+class NullPoseEstimator(PoseEstimator):
+    """Vision-free pose backend used in ``vlm-only`` mode."""
+
+    def estimate(self, frame: np.ndarray, frame_id: int) -> list[Pose]:
+        return []
 
 
 class MockPoseEstimator(PoseEstimator):
@@ -33,6 +42,8 @@ class MediaPipePoseEstimator(PoseEstimator):
         self._mp = mp.solutions.pose.Pose(min_detection_confidence=confidence, min_tracking_confidence=confidence)
 
     def estimate(self, frame: np.ndarray, frame_id: int) -> list[Pose]:
+        if frame.ndim != 3 or frame.shape[2] not in (3, 4):
+            raise ValueError("Pose estimator expects an HxWx3 or HxWx4 image frame.")
         result = self._mp.process(frame[:, :, ::-1])
         if not result.pose_landmarks:
             return []
@@ -41,5 +52,23 @@ class MediaPipePoseEstimator(PoseEstimator):
         return [Pose(person_id=1, keypoints={n: Keypoint(x=landmarks[i].x, y=landmarks[i].y, confidence=landmarks[i].visibility) for n, i in names.items()})]
 
 
-def create_pose_estimator(mode: str, confidence: float) -> PoseEstimator:
-    return MockPoseEstimator() if mode == "mock" else MediaPipePoseEstimator(confidence)
+def create_pose_estimator(mode: str, confidence: float, model_path: str = "") -> PoseEstimator:
+    """Build the default MediaPipe estimator or deterministic no-model fallback.
+
+    MediaPipe ships its own task assets; ``POSE_MODEL_PATH`` is reserved for a
+    future ONNX/YOLO adapter and is rejected here to avoid silently ignoring it.
+    """
+    if mode == "mock":
+        return MockPoseEstimator()
+    if mode == "vlm-only":
+        return NullPoseEstimator()
+    if mode not in {"full", "vision-only"}:
+        raise VisionConfigurationError("APP_MODE must be one of: full, vision-only, vlm-only, mock.")
+    if model_path:
+        path = Path(model_path)
+        if not path.is_file():
+            raise VisionConfigurationError(f"Pose model was not found: {model_path}. Remove POSE_MODEL_PATH to use MediaPipe, or provide a supported adapter.")
+        raise VisionConfigurationError("POSE_MODEL_PATH is set, but this build uses MediaPipe Pose. Remove it or install a compatible pose adapter.")
+    if not 0.0 <= confidence <= 1.0:
+        raise VisionConfigurationError("POSE_CONFIDENCE must be between 0 and 1.")
+    return MediaPipePoseEstimator(confidence)
