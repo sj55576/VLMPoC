@@ -27,7 +27,8 @@ class Repository:
 
     def save_vlm(self, session_id: str, provider: str, model: str, request: dict[str, Any], response: dict[str, Any], latency_ms: float, success: bool, error: str | None = None) -> None:
         with self.lock:
-            self.db.execute("INSERT INTO vlm_results(session_id,timestamp,provider,model,request_json,response_json,latency_ms,success,error_message) VALUES(?,?,?,?,?,?,?,?,?)", (session_id,datetime.utcnow().isoformat()+"Z",provider,model,json.dumps(request),json.dumps(response),latency_ms,int(success),error)); self.db.commit()
+            timestamp = datetime.now().astimezone().isoformat()
+            self.db.execute("INSERT INTO vlm_results(session_id,timestamp,provider,model,request_json,response_json,latency_ms,success,error_message) VALUES(?,?,?,?,?,?,?,?,?)", (session_id,timestamp,provider,model,json.dumps(request),json.dumps(response),latency_ms,int(success),error)); self.db.commit()
 
     def events(self, session_id: str | None = None) -> list[dict[str, Any]]:
         query, args = "SELECT * FROM events", []
