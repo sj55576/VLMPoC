@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from app.sop.conditions import ConditionEvaluator
 from app.sop.loader import load_sop
-from app.sop.models import SOPDefinition, StepDefinition, SOPMeta
+from app.sop.models import ConditionResult, SOPDefinition, StepDefinition, SOPMeta, StepStatus
 from app.sop.state_machine import SOPStateMachine
 from app.vision.models import Detection, Observation
 
@@ -21,3 +21,16 @@ def test_state_duration_and_timeout():
     state.update(ok,now); assert state.current_runtime.status==StepStatus.ACTIVE
     state.update(ok,now+timedelta(seconds=1.1)); assert state.steps["one"].status==StepStatus.COMPLETED
     timeout=SOPStateMachine(sop); timeout.update(ConditionResult(condition_id="x",type="x",passed=False,confidence=0,reason="no"),now); timeout.update(ConditionResult(condition_id="x",type="x",passed=False,confidence=0,reason="no"),now+timedelta(seconds=2.1)); assert timeout.steps["one"].status==StepStatus.FAILED
+
+
+def test_state_follows_on_success_and_suppresses_repeated_timeout():
+    sop = SOPDefinition(sop=SOPMeta(id="branch", name="branch", version="1"), steps=[
+        StepDefinition(id="one", name="one", conditions={"type":"object_present","object":"x"}, on_success="three"),
+        StepDefinition(id="two", name="two", conditions={"type":"object_present","object":"x"}),
+        StepDefinition(id="three", name="three", conditions={"type":"object_present","object":"x"}, terminal=True),
+    ])
+    state = SOPStateMachine(sop); now = datetime.now(timezone.utc)
+    result = ConditionResult(condition_id="x", type="x", passed=True, confidence=1, reason="ok")
+    state.update(result, now)
+    assert state.current.id == "three"
+    assert state.steps["two"].status == StepStatus.SKIPPED
