@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 
@@ -68,6 +69,8 @@ def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
 def load_settings(root: Path | None = None) -> Settings:
     """Load config/default.yaml, optional environment config, then safe env overrides."""
     root = root or Path(__file__).resolve().parents[2]
+    # Keep explicitly supplied process variables authoritative over values in .env.
+    load_dotenv(root / ".env", override=False)
     with (root / "config" / "default.yaml").open(encoding="utf-8") as file:
         data = yaml.safe_load(file) or {}
     env = os.getenv("APP_ENV", "development")
