@@ -38,6 +38,12 @@ class VLMSettings(BaseModel):
     max_images: int = 4
 
 
+class ActivitySettings(BaseModel):
+    enabled: bool = True
+    window_seconds: float = 2.0
+    min_hold_seconds: float = 0.6
+
+
 class StorageSettings(BaseModel):
     database_url: str = "sqlite:///./data/app.db"
     save_event_frames: bool = True
@@ -54,6 +60,7 @@ class Settings(BaseModel):
     app: AppSettings = Field(default_factory=AppSettings)
     vision: VisionSettings = Field(default_factory=VisionSettings)
     vlm: VLMSettings = Field(default_factory=VLMSettings)
+    activity: ActivitySettings = Field(default_factory=ActivitySettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
 

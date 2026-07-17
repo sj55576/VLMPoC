@@ -53,6 +53,13 @@ def create_app() -> FastAPI:
         if not value: raise HTTPException(404, "event not found")
         return value
 
+    @app.get("/api/activity")
+    async def activity():
+        current = service.pipeline.last_activity.model_dump(mode="json") if service.pipeline and service.pipeline.last_activity else None
+        events = service.repository.events(service.session["id"] if service.session else None)
+        history = [event for event in events if event.get("event_type") == "activity_changed"]
+        return {"current": current, "history": history}
+
     @app.get("/api/steps")
     async def steps(): return service.status()["steps"]
 

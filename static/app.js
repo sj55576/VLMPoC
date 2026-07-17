@@ -85,6 +85,12 @@ function renderVlm(result) {
   $("vlm-evidence").innerHTML = entries.map((item) => `<div class="evidence"><strong>${item.label}:</strong> ${escapeHtml(item.value)}</div>`).join("");
   $("vlm-result").textContent = JSON.stringify(result, null, 2);
 }
+function renderActivity(activity) {
+  if (!activity) { $("activity-label").textContent = "未検出"; $("activity-confidence").textContent = "—"; $("activity-duration").textContent = "—"; return; }
+  $("activity-label").textContent = text(activity.label);
+  $("activity-confidence").textContent = `${Math.round((activity.confidence || 0) * 100)}%`;
+  $("activity-duration").textContent = `継続時間: ${Math.round(activity.duration_seconds || 0)} 秒`;
+}
 function renderEvents(events) {
   state.events = events || [];
   $("events").innerHTML = state.events.length ? state.events.map((event) => {
@@ -111,6 +117,7 @@ function handleFrame(data, source = "websocket") {
   $("source-badge").textContent = state.source;
   $("canvas-empty").classList.add("hidden"); draw(data); renderCurrentStep(data.current_step, data.condition);
   if (data.recent_events) renderEvents(data.recent_events); if (data.vlm_result) renderVlm(data.vlm_result);
+  if (data.activity !== undefined) renderActivity(data.activity);
   if (data.vlm_calls !== undefined) state.vlmCalls = data.vlm_calls;
   else if (data.vlm_result && data.timestamp !== state.lastVlmTimestamp) {
     state.vlmCalls += 1; state.lastVlmTimestamp = data.timestamp;
