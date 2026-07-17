@@ -11,6 +11,19 @@ def test_health_and_full_mock_flow():
         events=client.get("/api/events").json(); assert len(events)>=4
         assert client.post("/api/session/stop").status_code==200
 
+def test_activity_present_after_processing_frames():
+    app=create_app()
+    with TestClient(app) as client:
+        client.post("/api/session/start",json={"source_type":"mock"})
+        payload=client.post("/api/vlm/analyze").json()
+        assert "activity" in payload
+        assert payload["activity"] is None or "label" in payload["activity"]
+        response=client.get("/api/activity")
+        assert response.status_code==200
+        body=response.json()
+        assert "current" in body and "history" in body
+
+
 def test_websocket_frame():
     app=create_app()
     with TestClient(app) as client:

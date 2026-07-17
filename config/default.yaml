@@ -22,6 +22,10 @@ vlm:
   api_key: ""
   interval_seconds: 5
   max_images: 4
+activity:
+  enabled: true
+  window_seconds: 2.0
+  min_hold_seconds: 0.6
 storage:
   database_url: sqlite:///./data/app.db
   save_event_frames: true

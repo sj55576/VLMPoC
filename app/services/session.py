@@ -25,6 +25,7 @@ class SessionService:
         self.sop = self.sops["example_assembly"]
         self.session: dict[str, Any] | None = None
         self.pipeline: VisionPipeline | None = None; self.subscribers: set[Any] = set(); self.frame_id = 0; self.recent_events: list[dict[str, Any]] = []; self._event_keys: set[tuple[str, str]] = set()
+        self._last_activity_label: str | None = None
         self.stream_subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._process_lock = asyncio.Lock()
         self._runner_task: asyncio.Task[None] | None = None
@@ -56,8 +57,8 @@ class SessionService:
             except KeyError as exc:
                 raise ValueError(f"Unknown SOP id: {sop_id}") from exc
         self.session = {"id":str(uuid.uuid4()),"sop_id":self.sop.sop.id,"source_type":source_type,"source_name":source_name,"started_at":datetime.now(timezone.utc).isoformat(),"status":"RUNNING"}
-        self.repository.create_session(self.session); self.frame_id = 0; self._event_keys.clear(); self.recent_events.clear(); self._source_started_at = datetime.now(timezone.utc)
-        engine = SOPEngine(self.sop); v = self.settings.vision; vlm = self.settings.vlm
+        self.repository.create_session(self.session); self.frame_id = 0; self._event_keys.clear(); self.recent_events.clear(); self._source_started_at = datetime.now(timezone.utc); self._last_activity_label = None
+        engine = SOPEngine(self.sop); v = self.settings.vision; vlm = self.settings.vlm; activity = self.settings.activity
         self.pipeline = VisionPipeline(
             create_detector(self.settings.app.mode, v.detection_model_path, v.detection_confidence, v.device, getattr(v, "class_aliases", {})),
             create_pose_estimator(self.settings.app.mode, v.pose_confidence, v.pose_model_path),
@@ -67,6 +68,9 @@ class SessionService:
             vlm.interval_seconds,
             max_images=vlm.max_images,
             capture_vlm_images=vlm.provider != "mock",
+            activity_window_seconds=activity.window_seconds,
+            activity_min_hold_seconds=activity.min_hold_seconds,
+            activity_enabled=activity.enabled,
         )
         return self.status()
 
@@ -125,7 +129,13 @@ class SessionService:
                 event["id"] = self.repository.save_event(self.session["id"], **event); self.repository.save_step(self.session["id"], self.pipeline.engine.state.steps[event["step_id"]]); self.recent_events = ([event] + self.recent_events)[:30]
         if self.session and self.pipeline.vlm_calls != calls_before:
             self.repository.save_vlm(self.session["id"], self.settings.vlm.provider, self.settings.vlm.model, self.pipeline.last_vlm_request or {}, obs.vlm_result or {}, self.pipeline.last_vlm_latency_ms, bool((obs.vlm_result or {}).get("provider_success", True)), (obs.vlm_result or {}).get("error_message"))
-        payload = {"type":"frame_result","timestamp":obs.timestamp.isoformat(),"fps":round(1/max(time.perf_counter()-start,.0001),2),"objects":[x.model_dump() for x in obs.objects],"poses":[x.model_dump() for x in obs.poses],"current_step":self.pipeline.engine.state.current.model_dump() if self.pipeline.engine.state.current else None,"recent_events":self.recent_events,"vlm_result":obs.vlm_result,"condition":condition.model_dump() if condition else None,"inference_ms":round((time.perf_counter()-start)*1000,2),"vlm_calls":self.pipeline.vlm_calls}
+        activity = self.pipeline.last_activity
+        if self.session and activity and activity.label != self._last_activity_label:
+            message = f"activity: {self._last_activity_label or 'unknown'} -> {activity.label}"
+            event = {"event_type":"activity_changed","step_id":self.pipeline.engine.state.current.id if self.pipeline.engine.state.current else "","message":message,"confidence":activity.confidence,"evidence":activity.evidence}
+            event["id"] = self.repository.save_event(self.session["id"], **event); self.recent_events = ([event] + self.recent_events)[:30]
+            self._last_activity_label = activity.label
+        payload = {"type":"frame_result","timestamp":obs.timestamp.isoformat(),"fps":round(1/max(time.perf_counter()-start,.0001),2),"objects":[x.model_dump() for x in obs.objects],"poses":[x.model_dump() for x in obs.poses],"current_step":self.pipeline.engine.state.current.model_dump() if self.pipeline.engine.state.current else None,"recent_events":self.recent_events,"vlm_result":obs.vlm_result,"condition":condition.model_dump() if condition else None,"inference_ms":round((time.perf_counter()-start)*1000,2),"vlm_calls":self.pipeline.vlm_calls,"activity":activity.model_dump(mode="json") if activity else None}
         await self.broadcast(payload); return payload
 
     async def broadcast(self, payload: dict[str, Any]) -> None:

@@ -23,13 +23,26 @@ class MockPoseEstimator(PoseEstimator):
     def estimate(self, frame: np.ndarray, frame_id: int) -> list[Pose]:
         # Coordinates are image-normalized, independent of source resolution.
         wrist_x = .36 if frame_id < 8 else .355
-        return [Pose(person_id=1, keypoints={
-            "nose": Keypoint(x=.32, y=.14, confidence=.96),
-            "left_wrist": Keypoint(x=wrist_x, y=.58, confidence=.92),
-            "right_wrist": Keypoint(x=.36, y=.58, confidence=.92),
-            "left_elbow": Keypoint(x=.30, y=.46, confidence=.89),
-            "right_elbow": Keypoint(x=.40, y=.46, confidence=.89),
-        })]
+        drift = .01 * min(frame_id - 20, 19) if 20 <= frame_id < 40 else (.19 if frame_id >= 40 else 0.0)
+        sitting = frame_id >= 40
+        hip_y, knee_y, ankle_y = (.70, .72, .90) if sitting else (.55, .75, .95)
+        right_wrist_y = .35 if frame_id >= 60 else .58
+        keypoints = {
+            "nose": Keypoint(x=.32 + drift, y=.14, confidence=.96),
+            "left_wrist": Keypoint(x=wrist_x + drift, y=.58, confidence=.92),
+            "right_wrist": Keypoint(x=.36 + drift, y=right_wrist_y, confidence=.92),
+            "left_elbow": Keypoint(x=.30 + drift, y=.46, confidence=.89),
+            "right_elbow": Keypoint(x=.40 + drift, y=.46, confidence=.89),
+            "left_shoulder": Keypoint(x=.30 + drift, y=.30, confidence=.9),
+            "right_shoulder": Keypoint(x=.34 + drift, y=.30, confidence=.9),
+            "left_hip": Keypoint(x=.29 + drift, y=hip_y, confidence=.88),
+            "right_hip": Keypoint(x=.35 + drift, y=hip_y, confidence=.88),
+            "left_knee": Keypoint(x=.29 + drift, y=knee_y, confidence=.85),
+            "right_knee": Keypoint(x=.35 + drift, y=knee_y, confidence=.85),
+            "left_ankle": Keypoint(x=.29 + drift, y=ankle_y, confidence=.85),
+            "right_ankle": Keypoint(x=.35 + drift, y=ankle_y, confidence=.85),
+        }
+        return [Pose(person_id=1, keypoints=keypoints)]
 
 
 class MediaPipePoseEstimator(PoseEstimator):
@@ -47,7 +60,7 @@ class MediaPipePoseEstimator(PoseEstimator):
         result = self._mp.process(frame[:, :, ::-1])
         if not result.pose_landmarks:
             return []
-        names = {"nose": 0, "left_elbow": 13, "right_elbow": 14, "left_wrist": 15, "right_wrist": 16}
+        names = {"nose": 0, "left_elbow": 13, "right_elbow": 14, "left_wrist": 15, "right_wrist": 16, "left_shoulder": 11, "right_shoulder": 12, "left_hip": 23, "right_hip": 24, "left_knee": 25, "right_knee": 26, "left_ankle": 27, "right_ankle": 28}
         landmarks = result.pose_landmarks.landmark
         return [Pose(person_id=1, keypoints={n: Keypoint(x=landmarks[i].x, y=landmarks[i].y, confidence=landmarks[i].visibility) for n, i in names.items()})]
 
