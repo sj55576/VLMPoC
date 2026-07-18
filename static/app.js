@@ -9,7 +9,7 @@ const state = {
   running: false, stream: null, requestInFlight: false, socket: null, reconnectTimer: null,
   pollingTimer: null, frameTimer: null, wsConnected: false, session: null, steps: [],
   progress: 0, events: [], vlmCalls: 0, lastFrame: null, lastVlmTimestamp: null,
-  previewUrl: null, source: "待機中",
+  previewUrl: null, source: "待機中", sopEnabled: true,
 };
 const SKELETON = [["nose","left_shoulder"],["nose","right_shoulder"],["left_shoulder","right_shoulder"],["left_shoulder","left_elbow"],["left_elbow","left_wrist"],["right_shoulder","right_elbow"],["right_elbow","right_wrist"],["left_shoulder","left_hip"],["right_shoulder","right_hip"],["left_hip","right_hip"],["left_hip","left_knee"],["left_knee","left_ankle"],["right_hip","right_knee"],["right_knee","right_ankle"]];
 
@@ -35,6 +35,11 @@ function updateButtons() {
   $("start").disabled = state.running;
   $("pause").disabled = !state.running;
   $("stop").disabled = !state.session || state.session.status === "STOPPED";
+}
+function setSopEnabled(enabled) {
+  state.sopEnabled = enabled;
+  document.querySelectorAll("[data-sop-only]").forEach((node) => node.classList.toggle("hidden", !enabled));
+  if (!enabled) setNotice("日常動作検出モードです。工程判定は無効です。");
 }
 
 function draw(data = {}) {
@@ -164,7 +169,9 @@ async function sendCameraFrame() {
   finally { state.requestInFlight = false; scheduleFrame(); }
 }
 async function startSession(sourceType, sourceName) {
-  const data = await call("/api/session/start", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({sop_id:$("sop").value, source_type:sourceType, source_name:sourceName})}); applyStatus(data); return data;
+  const payload = {source_type:sourceType, source_name:sourceName};
+  if (state.sopEnabled) payload.sop_id = $("sop").value;
+  const data = await call("/api/session/start", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)}); applyStatus(data); return data;
 }
 
 $("start").addEventListener("click", async () => {
@@ -191,4 +198,4 @@ $("video").addEventListener("change", async (event) => {
 $("refresh-events").addEventListener("click", refreshFallback);
 window.addEventListener("beforeunload", () => { stopCamera(); clearTimeout(state.reconnectTimer); stopPolling(); state.socket?.close(); });
 
-(async () => { connectWebSocket(); try { const [sops, status, events] = await Promise.all([call("/api/sops"), call("/api/session/status"), call("/api/events")]); $("sop").innerHTML = sops.map((sop) => `<option value="${escapeHtml(sop.id)}">${escapeHtml(sop.name)} (${escapeHtml(sop.version)})</option>`).join("") || $("sop").innerHTML; applyStatus(status); renderEvents(events); } catch (error) { setNotice(`初期情報を取得できません: ${error.message}`, true); startPolling(); } updateButtons(); })();
+(async () => { connectWebSocket(); try { const [config, sops, status, events] = await Promise.all([call("/api/config"), call("/api/sops"), call("/api/session/status"), call("/api/events")]); setSopEnabled(config.sop?.enabled !== false); $("sop").innerHTML = sops.map((sop) => `<option value="${escapeHtml(sop.id)}">${escapeHtml(sop.name)} (${escapeHtml(sop.version)})</option>`).join("") || $("sop").innerHTML; applyStatus(status); renderEvents(events); } catch (error) { setNotice(`初期情報を取得できません: ${error.message}`, true); startPolling(); } updateButtons(); })();

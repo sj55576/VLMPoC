@@ -24,6 +24,19 @@ def test_activity_present_after_processing_frames():
         assert "current" in body and "history" in body
 
 
+def test_daily_activity_mode_disables_sop(monkeypatch):
+    monkeypatch.setenv("SOP_ENABLED", "false")
+    app = create_app()
+    with TestClient(app) as client:
+        started = client.post("/api/session/start", json={"source_type": "mock"}).json()
+        assert started["session"]["sop_id"] == "daily_activity"
+        assert started["current_step"] is None
+        assert started["steps"] == []
+        frame = client.post("/api/vlm/analyze").json()
+        assert frame["current_step"] is None
+        assert frame["condition"] is None
+
+
 def test_websocket_frame():
     app=create_app()
     with TestClient(app) as client:
