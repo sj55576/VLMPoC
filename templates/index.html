@@ -20,7 +20,7 @@
 
   <main class="dashboard">
     <section class="panel controls" aria-label="操作">
-      <label class="field">SOP
+      <label class="field" data-sop-only>SOP
         <select id="sop" aria-label="SOPを選択"><option value="example_assembly">Example Assembly</option></select>
       </label>
       <div class="button-row">
@@ -55,7 +55,7 @@
       <p id="metrics" class="sr-only" aria-live="polite"></p>
     </section>
 
-    <section class="panel current-step" aria-label="現在の工程">
+    <section class="panel current-step" aria-label="現在の工程" data-sop-only>
       <div class="panel-heading"><h2>現在の工程</h2><span id="progress-label" class="badge">0%</span></div>
       <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-bar" class="progress-fill"></div></div>
       <p id="step-name" class="step-name">セッション未開始</p>
@@ -69,7 +69,7 @@
       <p id="activity-duration" class="muted">—</p>
     </section>
 
-    <section class="panel steps-panel" aria-label="工程一覧">
+    <section class="panel steps-panel" aria-label="工程一覧" data-sop-only>
       <div class="panel-heading"><h2>工程一覧</h2><span id="step-count" class="muted">0 / 0</span></div>
       <ol id="steps" class="steps-list"></ol>
     </section>

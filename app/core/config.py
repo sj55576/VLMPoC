@@ -44,6 +44,10 @@ class ActivitySettings(BaseModel):
     min_hold_seconds: float = 0.6
 
 
+class SOPSettings(BaseModel):
+    enabled: bool = True
+
+
 class StorageSettings(BaseModel):
     database_url: str = "sqlite:///./data/app.db"
     save_event_frames: bool = True
@@ -61,6 +65,7 @@ class Settings(BaseModel):
     vision: VisionSettings = Field(default_factory=VisionSettings)
     vlm: VLMSettings = Field(default_factory=VLMSettings)
     activity: ActivitySettings = Field(default_factory=ActivitySettings)
+    sop: SOPSettings = Field(default_factory=SOPSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
 
@@ -93,6 +98,7 @@ def load_settings(root: Path | None = None) -> Settings:
         "POSE_CONFIDENCE": ("vision", "pose_confidence"), "VLM_PROVIDER": ("vlm", "provider"),
         "VLM_MODEL": ("vlm", "model"), "VLM_BASE_URL": ("vlm", "base_url"), "VLM_API_KEY": ("vlm", "api_key"),
         "VLM_INTERVAL_SECONDS": ("vlm", "interval_seconds"), "VLM_MAX_IMAGES": ("vlm", "max_images"),
+        "SOP_ENABLED": ("sop", "enabled"),
         "DATABASE_URL": ("storage", "database_url"), "SAVE_EVENT_FRAMES": ("storage", "save_event_frames"),
     }
     for env_key, (section, key) in mappings.items():
