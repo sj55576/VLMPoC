@@ -1,3 +1,4 @@
+from app.core.config import VLMSettings
 from app.vlm.schemas import parse_vlm_response
 from app.vlm.openai_compatible_provider import OpenAICompatibleProvider
 
@@ -36,5 +37,6 @@ def test_json_parse_normalizes_local_vlm_schema_variations():
 
 
 def test_openai_compatible_provider_allows_an_empty_api_key():
-    provider = OpenAICompatibleProvider("local-vlm", "http://127.0.0.1:8000/v1", "")
+    settings = VLMSettings(model="local-vlm", base_url="http://127.0.0.1:8000/v1", api_key="")
+    provider = OpenAICompatibleProvider(settings)
     assert provider.api_key == ""

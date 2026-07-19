@@ -83,7 +83,7 @@ pip install -e '.[vision,local-vlm]'
 VLM_PROVIDER=openai_compatible VLM_MODEL=... VLM_BASE_URL=https://... VLM_API_KEY=... make dev
 ```
 
-`VLM_PROVIDER=mock|openai_compatible|local`で切替できます。APIキーはログや`/api/config`に露出しません。Transformersはモデル固有のchat template差異が大きいため、`app/vlm/local_provider.py`にデプロイ対象モデルのアダプターを追加してください。安全上重要な判定はVLM単独では確定しません。
+`VLM_PROVIDER=mock|openai_compatible|local`で切替できます。OpenAI互換プロバイダーはフレーム画像をbase64 JPEGとしてvision形式で送信します。VLM呼出はバックグラウンドで実行されるためフレーム処理を停止させず、結果は完了後のフレームに反映されます（`POST /api/vlm/analyze`は同期実行で最新結果を返します）。`VLM_TIMEOUT_SECONDS`、`VLM_MAX_RETRIES`（429/5xx/ネットワークエラーのみ再試行）、`VLM_JPEG_QUALITY`、`VLM_IMAGE_MAX_DIM`、`VLM_MIN_TRIGGER_GAP_SECONDS`（検出変化トリガーの最小間隔）、`VLM_FAILURE_BACKOFF_SECONDS`（失敗後の自動呼出抑制）で調整できます。日常動作モードではVLMの判定を優先し、失敗・不明時はローカル姿勢推定へフォールバックします。APIキーはログや`/api/config`に露出しません。Transformersはモデル固有のchat template差異が大きいため、`app/vlm/local_provider.py`にデプロイ対象モデルのアダプターを追加してください。安全上重要な判定はVLM単独では確定しません。
 
 実検出のラベルをSOPの物体名へ対応付けるには、`config/default.yaml`の`vision.class_aliases`を設定します。
 

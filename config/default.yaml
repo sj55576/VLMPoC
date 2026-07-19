@@ -22,6 +22,12 @@ vlm:
   api_key: ""
   interval_seconds: 5
   max_images: 4
+  timeout_seconds: 30
+  max_retries: 1
+  jpeg_quality: 80
+  image_max_dim: 640
+  min_trigger_gap_seconds: 2.0
+  failure_backoff_seconds: 30.0
 activity:
   enabled: true
   window_seconds: 2.0
