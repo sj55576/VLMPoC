@@ -65,9 +65,8 @@ class SessionService:
             create_pose_estimator(self.settings.app.mode, v.pose_confidence, v.pose_model_path),
             IoUTracker(v.tracker_iou_threshold, v.missing_tolerance_seconds),
             engine,
-            create_vlm_provider(vlm.provider, vlm.model, vlm.base_url, vlm.api_key),
-            vlm.interval_seconds,
-            max_images=vlm.max_images,
+            create_vlm_provider(vlm),
+            vlm_settings=vlm,
             capture_vlm_images=vlm.provider != "mock",
             activity_window_seconds=activity.window_seconds,
             activity_min_hold_seconds=activity.min_hold_seconds,
@@ -124,7 +123,6 @@ class SessionService:
             self._last_frame = frame.copy()
         frame = frame if frame is not None else self._last_frame if self._last_frame is not None else np.zeros((480,640,3), dtype=np.uint8)
         start = time.perf_counter()
-        calls_before = self.pipeline.vlm_calls
         simulated_now = self._source_started_at + timedelta(seconds=self.frame_id / 10) if self.settings.app.mode == "mock" and self._source_started_at else None
         obs, condition, transition = await self.pipeline.process(frame, self.frame_id, now=simulated_now, force_vlm=force_vlm); self.frame_id += 1
         if transition and self.session:
@@ -132,8 +130,10 @@ class SessionService:
             if key not in self._event_keys:
                 self._event_keys.add(key); event = {"event_type":transition,"step_id":self.pipeline.engine.sop.steps[self.pipeline.engine.state.index-1].id if transition == "step_completed" else self.pipeline.engine.state.current.id,"message":condition.reason,"confidence":condition.confidence,"evidence":condition.evidence}
                 event["id"] = self.repository.save_event(self.session["id"], **event); self.repository.save_step(self.session["id"], self.pipeline.engine.state.steps[event["step_id"]]); self.recent_events = ([event] + self.recent_events)[:30]
-        if self.session and self.pipeline.vlm_calls != calls_before:
-            self.repository.save_vlm(self.session["id"], self.settings.vlm.provider, self.settings.vlm.model, self.pipeline.last_vlm_request or {}, obs.vlm_result or {}, self.pipeline.last_vlm_latency_ms, bool((obs.vlm_result or {}).get("provider_success", True)), (obs.vlm_result or {}).get("error_message"))
+        if self.session and self.pipeline.pending_vlm_records:
+            records, self.pipeline.pending_vlm_records = self.pipeline.pending_vlm_records, []
+            for record in records:
+                self.repository.save_vlm(self.session["id"], self.settings.vlm.provider, self.settings.vlm.model, record["request"], record["response"], record["latency_ms"], record["success"], record["error_message"])
         activity = self.pipeline.last_activity
         if self.session and activity and activity.label != self._last_activity_label:
             message = f"activity: {self._last_activity_label or 'unknown'} -> {activity.label}"
