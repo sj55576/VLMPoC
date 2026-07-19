@@ -36,6 +36,12 @@ class VLMSettings(BaseModel):
     api_key: str = ""
     interval_seconds: float = 5.0
     max_images: int = 4
+    timeout_seconds: float = 30.0
+    max_retries: int = 1
+    jpeg_quality: int = 80
+    image_max_dim: int = 640
+    min_trigger_gap_seconds: float = 2.0
+    failure_backoff_seconds: float = 30.0
 
 
 class ActivitySettings(BaseModel):
@@ -98,6 +104,10 @@ def load_settings(root: Path | None = None) -> Settings:
         "POSE_CONFIDENCE": ("vision", "pose_confidence"), "VLM_PROVIDER": ("vlm", "provider"),
         "VLM_MODEL": ("vlm", "model"), "VLM_BASE_URL": ("vlm", "base_url"), "VLM_API_KEY": ("vlm", "api_key"),
         "VLM_INTERVAL_SECONDS": ("vlm", "interval_seconds"), "VLM_MAX_IMAGES": ("vlm", "max_images"),
+        "VLM_TIMEOUT_SECONDS": ("vlm", "timeout_seconds"), "VLM_MAX_RETRIES": ("vlm", "max_retries"),
+        "VLM_JPEG_QUALITY": ("vlm", "jpeg_quality"), "VLM_IMAGE_MAX_DIM": ("vlm", "image_max_dim"),
+        "VLM_MIN_TRIGGER_GAP_SECONDS": ("vlm", "min_trigger_gap_seconds"),
+        "VLM_FAILURE_BACKOFF_SECONDS": ("vlm", "failure_backoff_seconds"),
         "SOP_ENABLED": ("sop", "enabled"),
         "DATABASE_URL": ("storage", "database_url"), "SAVE_EVENT_FRAMES": ("storage", "save_event_frames"),
     }
