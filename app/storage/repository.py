@@ -1,7 +1,7 @@
 """Thread-safe, parameterized SQLite event repository."""
 from __future__ import annotations
 import json, threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from .database import connect
 
@@ -38,6 +38,20 @@ class Repository:
     def event(self, event_id: int) -> dict[str, Any] | None:
         with self.lock:
             row = self.db.execute("SELECT * FROM events WHERE id=?", (event_id,)).fetchone(); return dict(row) if row else None
+
+    def purge_older_than(self, retention_days: int) -> dict[str, int]:
+        """Delete rows older than retention_days; leaves RUNNING sessions untouched."""
+        if retention_days <= 0:
+            return {}
+        cutoff = (datetime.now().astimezone() - timedelta(days=retention_days)).isoformat()
+        with self.lock:
+            deleted = {}
+            deleted["events"] = self.db.execute("DELETE FROM events WHERE timestamp < ?", (cutoff,)).rowcount
+            deleted["vlm_results"] = self.db.execute("DELETE FROM vlm_results WHERE timestamp < ?", (cutoff,)).rowcount
+            deleted["step_results"] = self.db.execute("DELETE FROM step_results WHERE started_at < ?", (cutoff,)).rowcount
+            deleted["sessions"] = self.db.execute("DELETE FROM sessions WHERE started_at < ? AND status != 'RUNNING'", (cutoff,)).rowcount
+            self.db.commit()
+            return deleted
 
 
 def _iso(value: datetime | None) -> str | None: return value.isoformat() if value else None
