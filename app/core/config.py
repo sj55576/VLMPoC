@@ -110,6 +110,7 @@ def load_settings(root: Path | None = None) -> Settings:
         "VLM_FAILURE_BACKOFF_SECONDS": ("vlm", "failure_backoff_seconds"),
         "SOP_ENABLED": ("sop", "enabled"),
         "DATABASE_URL": ("storage", "database_url"), "SAVE_EVENT_FRAMES": ("storage", "save_event_frames"),
+        "RETENTION_DAYS": ("storage", "retention_days"),
     }
     for env_key, (section, key) in mappings.items():
         if env_key in os.environ:

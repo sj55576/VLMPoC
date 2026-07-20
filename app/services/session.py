@@ -21,6 +21,7 @@ from app.vlm.base import create_vlm_provider
 class SessionService:
     def __init__(self, settings: Settings, root: Any) -> None:
         self.settings, self.root, self.repository = settings, root, Repository(settings.storage.database_url)
+        self.repository.purge_older_than(settings.storage.retention_days)
         self.sops = self._load_sops()
         self.sop = self.sops["example_assembly"]
         self.session: dict[str, Any] | None = None
@@ -134,6 +135,18 @@ class SessionService:
             records, self.pipeline.pending_vlm_records = self.pipeline.pending_vlm_records, []
             for record in records:
                 self.repository.save_vlm(self.session["id"], self.settings.vlm.provider, self.settings.vlm.model, record["request"], record["response"], record["latency_ms"], record["success"], record["error_message"])
+                response = record["response"]
+                if record["success"] and response.get("safety_violation"):
+                    key = ("safety_violation", "|".join(sorted(response.get("violations") or [])))
+                    if key not in self._event_keys:
+                        self._event_keys.add(key)
+                        message = "safety violation: " + (", ".join(response.get("violations") or []) or "unspecified")
+                        step_id = self.pipeline.engine.state.current.id if self.settings.sop.enabled and self.pipeline.engine.state.current else ""
+                        confidence = float(response.get("confidence") or 0.0)
+                        evidence = {"violations": response.get("violations") or [], "scene_summary": response.get("scene_summary")}
+                        event = {"event_type":"safety_violation","severity":"CRITICAL","step_id":step_id,"message":message,"confidence":confidence,"evidence":evidence}
+                        event["id"] = self.repository.save_event(self.session["id"], event_type="safety_violation", step_id=step_id, message=message, confidence=confidence, evidence=evidence, severity="CRITICAL")
+                        self.recent_events = ([event] + self.recent_events)[:30]
         activity = self.pipeline.last_activity
         if self.session and activity and activity.label != self._last_activity_label:
             message = f"activity: {self._last_activity_label or 'unknown'} -> {activity.label}"
