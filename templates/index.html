@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VLM SOP Monitor</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -23,8 +24,19 @@
       <label class="field" data-sop-only>SOP
         <select id="sop" aria-label="SOPを選択"><option value="example_assembly">Example Assembly</option></select>
       </label>
+      <label class="field">現在の方式
+        <select id="source-type" aria-label="映像ソースの方式を選択">
+          <option value="browser">ブラウザカメラ</option>
+          <option value="server_camera">サーバーカメラ</option>
+          <option value="file">動画ファイル（サーバー）</option>
+          <option value="rtsp">RTSP / HTTPストリーム</option>
+        </select>
+      </label>
+      <label class="field hidden" id="source-uri-field">ソースURI
+        <input id="source-uri" type="text" aria-label="ソースURI（デバイス番号・ファイルパス・URL）">
+      </label>
       <div class="button-row">
-        <button id="start" class="primary">カメラ開始</button>
+        <button id="start" class="primary">開始</button>
         <button id="upload">動画アップロード</button>
         <button id="pause" disabled>一時停止</button>
         <button id="stop" class="danger" disabled>停止</button>
@@ -34,7 +46,7 @@
         <button id="vlm">VLM手動実行</button>
         <a class="button-link" href="/api/events/download">ログダウンロード</a>
       </div>
-      <p id="upload-status" class="hint" aria-live="polite">カメラまたは動画を選択してください。</p>
+      <p id="upload-status" class="hint" aria-live="polite">方式を選び、開始してください。ブラウザカメラ以外はサーバー側で映像を取り込みます。</p>
     </section>
 
     <section class="panel viewer" aria-label="解析映像">
@@ -50,9 +62,18 @@
         <div><dt>FPS</dt><dd id="metric-fps">—</dd></div>
         <div><dt>推論時間</dt><dd id="metric-inference">—</dd></div>
         <div><dt>VLM呼出</dt><dd id="metric-vlm">0</dd></div>
+        <div><dt>処理フレーム数</dt><dd id="metric-frames">—</dd></div>
         <div><dt>最終更新</dt><dd id="metric-time">—</dd></div>
       </dl>
       <p id="metrics" class="sr-only" aria-live="polite"></p>
+      <dl class="metrics source-status hidden" id="source-status" aria-label="映像ソースの状態">
+        <div><dt>ソース</dt><dd id="source-type-label">—</dd></div>
+        <div><dt>接続状態</dt><dd id="source-state">—</dd></div>
+        <div><dt>読込フレーム</dt><dd id="source-frames-read">—</dd></div>
+        <div><dt>破棄フレーム</dt><dd id="source-frames-dropped">—</dd></div>
+        <div><dt>再接続回数</dt><dd id="source-reconnects">—</dd></div>
+      </dl>
+      <p id="source-error" class="hint source-error hidden" aria-live="polite"></p>
     </section>
 
     <section class="panel current-step" aria-label="現在の工程" data-sop-only>
@@ -83,8 +104,23 @@
     </section>
 
     <section class="panel events-panel" aria-label="イベント履歴">
-      <div class="panel-heading"><h2>判定根拠・イベント</h2><button id="refresh-events" class="icon-button" title="イベントを更新" aria-label="イベントを更新">↻</button></div>
+      <div class="panel-heading">
+        <h2>判定根拠・イベント</h2>
+        <div class="button-row">
+          <button id="live-events" class="icon-button hidden" title="ライブイベントに戻る" aria-label="ライブイベントに戻る">ライブに戻る</button>
+          <button id="refresh-events" class="icon-button" title="イベントを更新" aria-label="イベントを更新">↻</button>
+        </div>
+      </div>
+      <p id="events-scope" class="hint muted hidden" aria-live="polite"></p>
       <div id="events" class="events-list"><p class="muted">イベントはまだありません。</p></div>
+    </section>
+
+    <section class="panel sessions-panel" aria-label="セッション履歴">
+      <div class="panel-heading">
+        <h2>セッション履歴</h2>
+        <button id="refresh-sessions" class="icon-button" title="セッション履歴を更新" aria-label="セッション履歴を更新">↻</button>
+      </div>
+      <div id="sessions" class="events-list" aria-label="セッション一覧"><p class="muted">セッション履歴を読み込み中…</p></div>
     </section>
   </main>
 

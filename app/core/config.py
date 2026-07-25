@@ -143,7 +143,6 @@ class SourceSettings(BaseModel):
 class StorageSettings(BaseModel):
     database_url: str = "sqlite:///./data/app.db"
     save_event_frames: bool = True
-    save_all_frames: bool = False
     retention_days: int = 30
     # Directory saved event/session frames are written to.
     frame_dir: str = "./data/frames"
@@ -224,7 +223,6 @@ def load_settings(root: Path | None = None) -> Settings:
         "SOURCE_MAX_RECONNECT_ATTEMPTS": ("source", "max_reconnect_attempts"),
         "SOURCE_LOOP_FILE": ("source", "loop_file"),
         "DATABASE_URL": ("storage", "database_url"), "SAVE_EVENT_FRAMES": ("storage", "save_event_frames"),
-        "SAVE_ALL_FRAMES": ("storage", "save_all_frames"),
         "RETENTION_DAYS": ("storage", "retention_days"),
         "FRAME_STORAGE_DIR": ("storage", "frame_dir"), "FRAME_JPEG_QUALITY": ("storage", "frame_jpeg_quality"),
         "FRAME_MAX_DIM": ("storage", "frame_max_dim"),

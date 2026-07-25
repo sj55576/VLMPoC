@@ -88,9 +88,11 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         # Server-side ingestion begins with the session, so an unusable camera or stream is
-        # reported here instead of silently producing nothing. The mock producer stays lazy:
-        # it only runs while a dashboard is attached.
-        if service.session and service.session["source_type"] in SERVER_SOURCE_TYPES:
+        # reported here instead of silently producing nothing. The mock producer stays lazy —
+        # it must not burn CPU for nobody — but a client that connected before this session
+        # existed would otherwise wait forever, so start it when someone is already attached.
+        kind = service.session["source_type"] if service.session else None
+        if kind in SERVER_SOURCE_TYPES or (kind == "mock" and service.has_subscribers):
             try:
                 await service.ensure_runner()
             except ValueError as exc:

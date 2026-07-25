@@ -175,6 +175,10 @@ class SessionService:
         source = {"type": self._source_spec.type if self._source_spec else "browser", "uri": self._source_spec.uri if self._source_spec else "", "error": self.source_error, **(self._source_spec.stats.as_dict() if self._source_spec else {})}
         return {"session":self.session,"current_step":state.current.model_dump() if state and state.current else None,"progress":state.progress() if state else 0,"steps":[x.model_dump(mode="json") for x in state.steps.values()] if state else [],"vlm_calls":self.pipeline.vlm_calls if self.pipeline else 0,"frames_processed":self.frames_processed,"source":source}
 
+    @property
+    def has_subscribers(self) -> bool:
+        return bool(self.subscribers or self.stream_subscribers)
+
     async def ensure_runner(self) -> None:
         """Start exactly one producer for the active session; clients only consume broadcasts."""
         if not self.session or self.session["status"] != "RUNNING" or self._source_spec is None:

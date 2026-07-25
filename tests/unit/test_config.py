@@ -60,7 +60,6 @@ def test_env_overrides_yaml_defaults(monkeypatch) -> None:
     monkeypatch.setenv("RETENTION_INTERVAL_MINUTES", "30")
     monkeypatch.setenv("API_KEY", "s3cr3t")
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "120")
-    monkeypatch.setenv("SAVE_ALL_FRAMES", "true")
     monkeypatch.setenv("ACTIVITY_ENABLED", "false")
 
     settings = load_settings(ROOT)
@@ -79,7 +78,6 @@ def test_env_overrides_yaml_defaults(monkeypatch) -> None:
     assert settings.storage.retention_interval_minutes == 30
     assert settings.security.api_key == "s3cr3t"
     assert settings.security.rate_limit_per_minute == 120
-    assert settings.storage.save_all_frames is True
     assert settings.activity.enabled is False
 
 

@@ -50,7 +50,6 @@ source:
 storage:
   database_url: sqlite:///./data/app.db
   save_event_frames: true
-  save_all_frames: false
   retention_days: 30
   # Directory saved event/session frames are written to.
   frame_dir: ./data/frames

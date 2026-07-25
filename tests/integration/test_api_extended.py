@@ -199,3 +199,14 @@ def test_configured_source_is_used_when_the_request_omits_one(sample_clip, monke
         assert started.status_code == 200, started.text
         assert started.json()["session"]["source_type"] == "file"
         assert _await_ingestion(client, started.json(), 10)["frames_processed"] == 10
+
+
+def test_mock_producer_starts_for_a_client_that_connected_first():
+    """A dashboard attached before the session exists must not wait forever for frames."""
+    with TestClient(create_app()) as client:
+        with client.websocket_connect("/api/ws") as ws:
+            started = client.post("/api/session/start", json={"source_type": "mock"})
+            assert started.status_code == 200
+            assert ws.receive_json()["type"] == "frame_result"
+        status = client.get("/api/session/status").json()
+        assert status["frames_processed"] > 0
