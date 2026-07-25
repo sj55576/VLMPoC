@@ -1,11 +1,15 @@
 """Live session coordinator, event de-duplication, and websocket fan-out."""
 from __future__ import annotations
+
 import asyncio
+import contextlib
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
+
 import numpy as np
+
 from app.core.config import Settings
 from app.sop.engine import SOPEngine
 from app.sop.loader import load_sop
@@ -58,8 +62,8 @@ class SessionService:
                 self.sop = self.sops[sop_id]
             except KeyError as exc:
                 raise ValueError(f"Unknown SOP id: {sop_id}") from exc
-        self.session = {"id":str(uuid.uuid4()),"sop_id":self.sop.sop.id if self.settings.sop.enabled else "daily_activity","source_type":source_type,"source_name":source_name,"started_at":datetime.now(timezone.utc).isoformat(),"status":"RUNNING"}
-        self.repository.create_session(self.session); self.frame_id = 0; self._event_keys.clear(); self.recent_events.clear(); self._source_started_at = datetime.now(timezone.utc); self._last_activity_label = None; self._last_frame = None
+        self.session = {"id":str(uuid.uuid4()),"sop_id":self.sop.sop.id if self.settings.sop.enabled else "daily_activity","source_type":source_type,"source_name":source_name,"started_at":datetime.now(UTC).isoformat(),"status":"RUNNING"}
+        self.repository.create_session(self.session); self.frame_id = 0; self._event_keys.clear(); self.recent_events.clear(); self._source_started_at = datetime.now(UTC); self._last_activity_label = None; self._last_frame = None
         engine = SOPEngine(self.sop); v = self.settings.vision; vlm = self.settings.vlm; activity = self.settings.activity
         self.pipeline = VisionPipeline(
             create_detector(self.settings.app.mode, v.detection_model_path, v.detection_confidence, v.device, getattr(v, "class_aliases", {})),
@@ -78,7 +82,7 @@ class SessionService:
 
     def stop(self) -> dict[str, Any]:
         if self.session and self.session["status"] == "RUNNING":
-            self.repository.stop_session(self.session["id"], datetime.now(timezone.utc).isoformat()); self.session["status"] = "STOPPED"
+            self.repository.stop_session(self.session["id"], datetime.now(UTC).isoformat()); self.session["status"] = "STOPPED"
         if self._runner_task and not self._runner_task.done():
             self._runner_task.cancel()
         self._runner_task = None
@@ -96,12 +100,9 @@ class SessionService:
             self._runner_task = asyncio.create_task(self._run_mock_source())
 
     async def _run_mock_source(self) -> None:
-        try:
-            while self.session and self.session["status"] == "RUNNING":
-                await self.process_mock_frame()
-                await asyncio.sleep(0.1)
-        except asyncio.CancelledError:
-            raise
+        while self.session and self.session["status"] == "RUNNING":
+            await self.process_mock_frame()
+            await asyncio.sleep(0.1)
 
     def subscribe_stream(self) -> asyncio.Queue[dict[str, Any]]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=2)
@@ -130,7 +131,7 @@ class SessionService:
             key = (transition, condition.reason)
             if key not in self._event_keys:
                 self._event_keys.add(key); event = {"event_type":transition,"step_id":self.pipeline.engine.sop.steps[self.pipeline.engine.state.index-1].id if transition == "step_completed" else self.pipeline.engine.state.current.id,"message":condition.reason,"confidence":condition.confidence,"evidence":condition.evidence}
-                event["id"] = self.repository.save_event(self.session["id"], **event); self.repository.save_step(self.session["id"], self.pipeline.engine.state.steps[event["step_id"]]); self.recent_events = ([event] + self.recent_events)[:30]
+                event["id"] = self.repository.save_event(self.session["id"], **event); self.repository.save_step(self.session["id"], self.pipeline.engine.state.steps[event["step_id"]]); self.recent_events = [event, *self.recent_events][:30]
         if self.session and self.pipeline.pending_vlm_records:
             records, self.pipeline.pending_vlm_records = self.pipeline.pending_vlm_records, []
             for record in records:
@@ -146,12 +147,12 @@ class SessionService:
                         evidence = {"violations": response.get("violations") or [], "scene_summary": response.get("scene_summary")}
                         event = {"event_type":"safety_violation","severity":"CRITICAL","step_id":step_id,"message":message,"confidence":confidence,"evidence":evidence}
                         event["id"] = self.repository.save_event(self.session["id"], event_type="safety_violation", step_id=step_id, message=message, confidence=confidence, evidence=evidence, severity="CRITICAL")
-                        self.recent_events = ([event] + self.recent_events)[:30]
+                        self.recent_events = [event, *self.recent_events][:30]
         activity = self.pipeline.last_activity
         if self.session and activity and activity.label != self._last_activity_label:
             message = f"activity: {self._last_activity_label or 'unknown'} -> {activity.label}"
             event = {"event_type":"activity_changed","step_id":self.pipeline.engine.state.current.id if self.settings.sop.enabled and self.pipeline.engine.state.current else "","message":message,"confidence":activity.confidence,"evidence":activity.evidence}
-            event["id"] = self.repository.save_event(self.session["id"], **event); self.recent_events = ([event] + self.recent_events)[:30]
+            event["id"] = self.repository.save_event(self.session["id"], **event); self.recent_events = [event, *self.recent_events][:30]
             self._last_activity_label = activity.label
         payload = {"type":"frame_result","timestamp":obs.timestamp.isoformat(),"fps":round(1/max(time.perf_counter()-start,.0001),2),"objects":[x.model_dump() for x in obs.objects],"poses":[x.model_dump() for x in obs.poses],"current_step":self.pipeline.engine.state.current.model_dump() if self.settings.sop.enabled and self.pipeline.engine.state.current else None,"recent_events":self.recent_events,"vlm_result":obs.vlm_result,"condition":condition.model_dump() if condition else None,"inference_ms":round((time.perf_counter()-start)*1000,2),"vlm_calls":self.pipeline.vlm_calls,"activity":activity.model_dump(mode="json") if activity else None}
         await self.broadcast(payload); return payload
@@ -164,6 +165,5 @@ class SessionService:
         for ws in stale: self.subscribers.discard(ws)
         for queue in self.stream_subscribers:
             if queue.full():
-                try: queue.get_nowait()
-                except asyncio.QueueEmpty: pass
+                with contextlib.suppress(asyncio.QueueEmpty): queue.get_nowait()
             queue.put_nowait(payload)

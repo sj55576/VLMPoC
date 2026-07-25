@@ -1,9 +1,13 @@
 """Pluggable object detection backends."""
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+
 import numpy as np
+
 from .geometry import sanitize_bbox
 from .models import Detection
 

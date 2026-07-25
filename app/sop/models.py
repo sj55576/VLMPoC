@@ -1,16 +1,18 @@
 """Validated SOP and evaluation domain models."""
 from __future__ import annotations
+
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 
-class StepStatus(str, Enum):
+class StepStatus(StrEnum):
     PENDING = "PENDING"; ACTIVE = "ACTIVE"; COMPLETED = "COMPLETED"; SKIPPED = "SKIPPED"; FAILED = "FAILED"
 
 
-class EventStatus(str, Enum):
+class EventStatus(StrEnum):
     NOT_STARTED = "NOT_STARTED"; IN_PROGRESS = "IN_PROGRESS"; COMPLETED = "COMPLETED"; FAILED = "FAILED"; VIOLATION = "VIOLATION"; UNKNOWN = "UNKNOWN"
 
 

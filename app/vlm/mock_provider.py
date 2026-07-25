@@ -1,7 +1,8 @@
 """Deterministic VLM that validates orchestration without network/model downloads."""
 from typing import Any
+
 from .base import VLMProvider
-from .schemas import VLMResponse, VLMEvidence
+from .schemas import VLMEvidence, VLMResponse
 
 
 class MockVLMProvider(VLMProvider):

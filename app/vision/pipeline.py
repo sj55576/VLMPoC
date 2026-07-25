@@ -1,16 +1,20 @@
 """Frame pipeline that avoids VLM-per-frame and retains bounded temporal history."""
 from __future__ import annotations
+
 import asyncio
 import time
 from collections import deque
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
+
 import numpy as np
+
 from app.activity import ActivityEstimate, ActivityEstimator
 from app.core.config import VLMSettings
 from app.sop.engine import SOPEngine
 from app.vlm.base import VLMProvider
 from app.vlm.schemas import VLMEvidence, VLMResponse, unknown_response
+
 from .detector import Detector
 from .models import Observation
 from .pose import PoseEstimator
@@ -26,7 +30,7 @@ class VisionPipeline:
         self.last_vlm_latency_ms: float = 0.0
         self.last_vlm: dict[str, Any] | None = None
         self.last_vlm_request: dict[str, Any] | None = None
-        self.base_time = datetime.now(timezone.utc)
+        self.base_time = datetime.now(UTC)
         self.activity_enabled = activity_enabled
         self.sop_enabled = sop_enabled
         self.activity = ActivityEstimator(window_seconds=activity_window_seconds, min_hold_seconds=activity_min_hold_seconds)
@@ -65,6 +69,7 @@ class VisionPipeline:
 
     def _encode_image(self, frame: np.ndarray) -> str:
         import base64
+
         import cv2
         height, width = frame.shape[0], frame.shape[1]
         max_dim = self.vlm_settings.image_max_dim
@@ -126,7 +131,7 @@ class VisionPipeline:
         try:
             response, latency_ms = await self._call_vlm(frame, request)
             self._apply_result(request, response, latency_ms)
-        except Exception as exc:  # noqa: BLE001 - background task must never raise
+        except Exception as exc:
             self._record_failure(request, exc)
 
     def _should_trigger(self, candidate: set[str], prior: set[str], now: datetime) -> bool:
@@ -140,9 +145,7 @@ class VisionPipeline:
         elapsed = (now - self.last_vlm_at).total_seconds()
         if elapsed >= settings.interval_seconds:
             return True
-        if candidate != prior and elapsed >= settings.min_trigger_gap_seconds:
-            return True
-        return False
+        return candidate != prior and elapsed >= settings.min_trigger_gap_seconds
 
     async def process(self, frame: np.ndarray, frame_id: int, now: datetime | None = None, force_vlm: bool = False) -> tuple[Observation, Any, str | None]:
         now = now or self.base_time + timedelta(seconds=frame_id/10)
@@ -164,7 +167,7 @@ class VisionPipeline:
             try:
                 response, latency_ms = await self._call_vlm(frame, request)
                 self._apply_result(request, response, latency_ms)
-            except Exception as exc:  # noqa: BLE001 - keep the API path resilient
+            except Exception as exc:
                 self._record_failure(request, exc)
             obs.vlm_result = self.last_vlm
         elif self._should_trigger(candidate, prior, now):

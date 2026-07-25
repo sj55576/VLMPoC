@@ -1,7 +1,9 @@
 """Common detector, pose, and observation models."""
 from __future__ import annotations
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -27,7 +29,7 @@ class Pose(BaseModel):
 
 
 class Observation(BaseModel):
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     frame_id: int = 0
     width: int = 1
     height: int = 1

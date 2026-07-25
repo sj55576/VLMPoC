@@ -1,8 +1,9 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 from app.activity import ActivityEstimator
 from app.vision.models import Detection, Keypoint, Observation, Pose
 
-BASE = datetime(2026, 1, 1, tzinfo=timezone.utc)
+BASE = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def _standing_keypoints(x: float = 0.30) -> dict[str, Keypoint]:

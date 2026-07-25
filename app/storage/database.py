@@ -1,8 +1,8 @@
 """SQLite bootstrap; SQLAlchemy remains a supported dependency for production migrations."""
 from __future__ import annotations
+
 import sqlite3
 from pathlib import Path
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, sop_id TEXT, source_type TEXT, source_name TEXT, started_at TEXT, ended_at TEXT, status TEXT);

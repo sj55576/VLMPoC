@@ -30,4 +30,8 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-ignore = ["E401", "E501", "E701", "E702"]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+# E401/E501/E701/E702 keep the intentionally dense one-line style of this codebase.
+# B008 is the standard FastAPI dependency idiom (File(...), Depends(...)).
+# RUF001-003 fire on the intentional Japanese full-width punctuation in prompts and UI strings.
+ignore = ["E401", "E501", "E701", "E702", "B008", "RUF001", "RUF002", "RUF003"]

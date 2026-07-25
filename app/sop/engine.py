@@ -1,6 +1,8 @@
 """SOP rule engine facade."""
 from datetime import datetime
+
 from app.vision.models import Observation
+
 from .conditions import ConditionEvaluator
 from .models import ConditionResult, SOPDefinition
 from .state_machine import SOPStateMachine

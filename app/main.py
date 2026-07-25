@@ -1,10 +1,24 @@
 """FastAPI entrypoint for the local SOP monitor."""
 from __future__ import annotations
-import csv, io, json, tempfile
+
+import csv
+import io
+import json
+import tempfile
 from pathlib import Path
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+
 from app.core.config import load_settings
 from app.core.logging import configure_logging
 from app.services.session import SessionService

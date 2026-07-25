@@ -1,8 +1,11 @@
 """Recursive SOP condition evaluator with evidence-rich leaf results."""
 from __future__ import annotations
+
 from typing import Any
+
 from app.vision.geometry import calculate_joint_angle, distance, inside_region
 from app.vision.models import Observation
+
 from .models import ConditionResult
 
 

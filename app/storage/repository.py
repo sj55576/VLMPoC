@@ -1,8 +1,11 @@
 """Thread-safe, parameterized SQLite event repository."""
 from __future__ import annotations
-import json, threading
+
+import json
+import threading
 from datetime import datetime, timedelta
 from typing import Any
+
 from .database import connect
 
 

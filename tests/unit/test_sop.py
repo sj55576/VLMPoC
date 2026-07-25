@@ -1,10 +1,12 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
 from app.sop.conditions import ConditionEvaluator
 from app.sop.loader import load_sop
-from app.sop.models import ConditionResult, SOPDefinition, StepDefinition, SOPMeta, StepStatus
+from app.sop.models import ConditionResult, SOPDefinition, SOPMeta, StepDefinition, StepStatus
 from app.sop.state_machine import SOPStateMachine
 from app.vision.models import Detection, Observation
+
 
 def test_loader_and_boolean_conditions():
     sop=load_sop(Path("sop/example_assembly.yaml")); assert len(sop.steps)==4
@@ -15,7 +17,7 @@ def test_loader_and_boolean_conditions():
 
 def test_state_duration_and_timeout():
     sop=SOPDefinition(sop=SOPMeta(id="x",name="x",version="1"),steps=[StepDefinition(id="one",name="one",conditions={"type":"object_present","object":"x"},minimum_duration_seconds=1,timeout_seconds=2)])
-    state=SOPStateMachine(sop); now=datetime.now(timezone.utc)
+    state=SOPStateMachine(sop); now=datetime.now(UTC)
     from app.sop.models import ConditionResult, StepStatus
     ok=ConditionResult(condition_id="x",type="x",passed=True,confidence=1,reason="ok")
     state.update(ok,now); assert state.current_runtime.status==StepStatus.ACTIVE
@@ -29,7 +31,7 @@ def test_state_follows_on_success_and_suppresses_repeated_timeout():
         StepDefinition(id="two", name="two", conditions={"type":"object_present","object":"x"}),
         StepDefinition(id="three", name="three", conditions={"type":"object_present","object":"x"}, terminal=True),
     ])
-    state = SOPStateMachine(sop); now = datetime.now(timezone.utc)
+    state = SOPStateMachine(sop); now = datetime.now(UTC)
     result = ConditionResult(condition_id="x", type="x", passed=True, confidence=1, reason="ok")
     state.update(result, now)
     assert state.current.id == "three"

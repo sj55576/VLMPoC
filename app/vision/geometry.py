@@ -1,6 +1,8 @@
 """Pure geometry helpers used by pose and SOP conditions."""
 from __future__ import annotations
+
 import math
+
 from .models import Keypoint
 
 

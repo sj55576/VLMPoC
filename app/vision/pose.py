@@ -1,8 +1,11 @@
 """Pluggable pose estimation backends with a shared normalized representation."""
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from pathlib import Path
+
 import numpy as np
+
 from .detector import VisionConfigurationError
 from .models import Keypoint, Pose
 

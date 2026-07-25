@@ -1,9 +1,13 @@
 """OpenAI-compatible JSON-schema API adapter using the standard library."""
 from __future__ import annotations
-import asyncio, json, time
-from typing import Any, TYPE_CHECKING
+
+import asyncio
+import json
+import time
+from typing import TYPE_CHECKING, Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
 from .base import VLMProvider
 from .prompts import DAILY_ACTIVITY_SYSTEM_PROMPT, JSON_SCHEMA, SYSTEM_PROMPT
 from .schemas import VLMResponse, parse_vlm_response
@@ -15,7 +19,7 @@ _RETRY_BACKOFF_SECONDS = (1, 2)
 
 
 class OpenAICompatibleProvider(VLMProvider):
-    def __init__(self, settings: "VLMSettings") -> None:
+    def __init__(self, settings: VLMSettings) -> None:
         if not (settings.model and settings.base_url): raise ValueError("VLM_MODEL and VLM_BASE_URL are required")
         self.model, self.base_url, self.api_key = settings.model, settings.base_url.rstrip("/"), settings.api_key
         self.timeout_seconds = settings.timeout_seconds
