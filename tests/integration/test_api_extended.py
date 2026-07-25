@@ -148,7 +148,9 @@ def test_browser_source_types_stay_client_driven():
         assert status["source"]["type"] == "browser"
 
 
-def test_server_side_file_source_ingests_frames(monkeypatch):
+@pytest.fixture
+def sample_clip(monkeypatch):
+    """A short video inside ./data, the only directory a file source may read from."""
     monkeypatch.setenv("SOURCE_TARGET_FPS", "500")
     import cv2
 
@@ -162,18 +164,38 @@ def test_server_side_file_source_ingests_frames(monkeypatch):
         writer.write(frame)
     writer.release()
     try:
-        with TestClient(create_app()) as client:
-            started = client.post("/api/session/start", json={"source_type": "file", "source_uri": clip.name})
-            assert started.status_code == 200, started.text
-            assert started.json()["session"]["source_type"] == "file"
-            deadline = time.time() + 10
-            status = started.json()
-            while time.time() < deadline and status["frames_processed"] < 10:
-                time.sleep(0.05)
-                status = client.get("/api/session/status").json()
-            assert status["frames_processed"] == 10
-            assert status["source"]["frames_read"] == 10
-            assert status["source"]["finished"] is True
-            assert status["session"]["status"] == "STOPPED"  # the runner stops at end of file
+        yield clip
     finally:
         Path(clip).unlink(missing_ok=True)
+
+
+def _await_ingestion(client: TestClient, started: dict, expected: int) -> dict:
+    deadline = time.time() + 10
+    status = started
+    while time.time() < deadline and status["frames_processed"] < expected:
+        time.sleep(0.05)
+        status = client.get("/api/session/status").json()
+    return status
+
+
+def test_server_side_file_source_ingests_frames(sample_clip):
+    with TestClient(create_app()) as client:
+        started = client.post("/api/session/start", json={"source_type": "file", "source_uri": sample_clip.name})
+        assert started.status_code == 200, started.text
+        assert started.json()["session"]["source_type"] == "file"
+        status = _await_ingestion(client, started.json(), 10)
+        assert status["frames_processed"] == 10
+        assert status["source"]["frames_read"] == 10
+        assert status["source"]["finished"] is True
+        assert status["session"]["status"] == "STOPPED"  # the runner stops at end of file
+
+
+def test_configured_source_is_used_when_the_request_omits_one(sample_clip, monkeypatch):
+    """`source.type` in config is server-side, so it must not be aliased to the browser."""
+    monkeypatch.setenv("SOURCE_TYPE", "file")
+    monkeypatch.setenv("SOURCE_URI", sample_clip.name)
+    with TestClient(create_app()) as client:
+        started = client.post("/api/session/start", json={})
+        assert started.status_code == 200, started.text
+        assert started.json()["session"]["source_type"] == "file"
+        assert _await_ingestion(client, started.json(), 10)["frames_processed"] == 10

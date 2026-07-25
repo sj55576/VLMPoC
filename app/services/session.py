@@ -37,6 +37,8 @@ LOGGER = logging.getLogger(__name__)
 # uses its own names so a cached dashboard can never make the server open a webcam.
 BROWSER_SOURCE_ALIASES = {"camera": "browser", "video": "browser", "browser": "browser"}
 SERVER_SOURCE_TYPES = {"server_camera": "camera", "file": "file", "rtsp": "rtsp"}
+# config `source.type` is server-side by definition, so its "camera" is the host webcam.
+CONFIGURED_SOURCE_NAMES = {"mock": "mock", "camera": "server_camera", "file": "file", "rtsp": "rtsp"}
 
 
 class SessionService:
@@ -85,8 +87,13 @@ class SessionService:
         Returns the canonical session source type and the spec to capture from, or
         ``None`` when frames arrive from the browser instead of the server.
         """
-        requested = (source_type or self.settings.source.type or "mock").strip()
-        kind = BROWSER_SOURCE_ALIASES.get(requested, requested)
+        if source_type:
+            requested = source_type.strip()
+            kind = BROWSER_SOURCE_ALIASES.get(requested, requested)
+        else:
+            # No explicit request: fall back to the configured server-side default.
+            kind = CONFIGURED_SOURCE_NAMES.get((self.settings.source.type or "mock").strip(), "mock")
+            requested = kind
         if kind == "browser":
             return kind, None
         spec_type = "mock" if kind == "mock" else SERVER_SOURCE_TYPES.get(kind)
