@@ -33,7 +33,7 @@ def test_safety_violation_emits_critical_event(tmp_path) -> None:
     service.start(source_type="mock", source_name="synthetic")
     service.pipeline.vlm = SafetyViolationVLM()
 
-    asyncio.run(service.process_mock_frame(force_vlm=True))
+    asyncio.run(service.process_frame(force_vlm=True))
 
     events = service.repository.events(service.session["id"])
     safety_events = [event for event in events if event["event_type"] == "safety_violation"]
@@ -49,8 +49,8 @@ def test_safety_violation_dedup_same_violation_set(tmp_path) -> None:
     service.start(source_type="mock", source_name="synthetic")
     service.pipeline.vlm = SafetyViolationVLM()
 
-    asyncio.run(service.process_mock_frame(force_vlm=True))
-    asyncio.run(service.process_mock_frame(force_vlm=True))
+    asyncio.run(service.process_frame(force_vlm=True))
+    asyncio.run(service.process_frame(force_vlm=True))
 
     events = service.repository.events(service.session["id"])
     safety_events = [event for event in events if event["event_type"] == "safety_violation"]

@@ -28,17 +28,39 @@ vlm:
   image_max_dim: 640
   min_trigger_gap_seconds: 2.0
   failure_backoff_seconds: 30.0
+  # How long (seconds) a cached VLM result may still satisfy a vlm_confirmation condition.
+  max_result_age_seconds: 15.0
 activity:
   enabled: true
   window_seconds: 2.0
   min_hold_seconds: 0.6
 sop:
   enabled: true
+source:
+  # mock | camera | file | rtsp
+  type: mock
+  # Camera index ("0"), file path, or rtsp:// URL. Unused by the mock source.
+  uri: ""
+  target_fps: 10.0
+  queue_size: 2
+  reconnect_seconds: 3.0
+  # 0 means retry forever.
+  max_reconnect_attempts: 0
+  loop_file: false
 storage:
   database_url: sqlite:///./data/app.db
   save_event_frames: true
-  save_all_frames: false
   retention_days: 30
+  # Directory saved event/session frames are written to.
+  frame_dir: ./data/frames
+  frame_jpeg_quality: 80
+  frame_max_dim: 1280
+  # Minutes between periodic retention purges; <= 0 disables the periodic purge.
+  retention_interval_minutes: 60
 security:
   max_upload_mb: 100
   allowed_video_extensions: [".mp4", ".avi", ".mov", ".mkv"]
+  # Empty disables API key auth entirely.
+  api_key: ""
+  # 0 disables rate limiting.
+  rate_limit_per_minute: 0

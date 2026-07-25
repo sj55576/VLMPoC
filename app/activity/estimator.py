@@ -1,8 +1,11 @@
 """Heuristic daily-activity estimation from pose keypoints and nearby objects."""
 from __future__ import annotations
+
 from collections import Counter, deque
 from datetime import datetime
+
 from app.vision.models import Keypoint, Observation
+
 from .models import ActivityEstimate, ActivityLabel
 
 CONFIDENCE_THRESHOLD = 0.3

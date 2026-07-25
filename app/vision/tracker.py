@@ -1,7 +1,9 @@
 """IoU tracker fallback retaining identity and basic motion metadata."""
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from .geometry import iou
 from .models import Detection
 
@@ -13,8 +15,8 @@ class Track:
     confidence: float
     bbox: tuple[float, float, float, float]
     history: list[tuple[float, float, float, float]] = field(default_factory=list)
-    last_seen: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    first_seen: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
+    first_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
     velocity: tuple[float, float] = (0.0, 0.0)
     direction: tuple[float, float] = (0.0, 0.0)
     missing_seconds: float = 0.0
@@ -30,7 +32,7 @@ class IoUTracker:
         self.history_size, self._next_id, self.tracks = max(1, history_size), 1, {}
 
     def update(self, detections: list[Detection], now: datetime | None = None) -> list[Detection]:
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         valid = [detection for detection in detections if iou(detection.bbox, detection.bbox) > 0]
         candidates = sorted(
             ((iou(detection.bbox, track.bbox), detection_index, track_id)
@@ -65,7 +67,7 @@ class IoUTracker:
             track.velocity = velocity
             track.direction = (velocity[0] / speed, velocity[1] / speed) if speed else (0.0, 0.0)
             if not created:
-                track.history = (track.history + [track.bbox])[-self.history_size:]
+                track.history = [*track.history, track.bbox][-self.history_size:]
             track.bbox, track.confidence, track.last_seen, track.missing_seconds = detection.bbox, detection.confidence, now, 0.0
             detection.track_id = track_id
         retained: dict[int, Track] = {}

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -89,7 +89,7 @@ def make_pipeline(vlm: VLMProvider, vlm_settings: VLMSettings | None = None, sop
 def test_process_does_not_block_on_slow_vlm() -> None:
     async def scenario() -> None:
         pipeline, _ = make_pipeline(SlowVLM())
-        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 1, tzinfo=UTC)
 
         t0 = time.perf_counter()
         obs, _, _ = await pipeline.process(FRAME, 0, now=start)
@@ -111,7 +111,7 @@ def test_force_vlm_awaits_and_returns_fresh_result() -> None:
     async def scenario() -> None:
         vlm = CountingVLM()
         pipeline, _ = make_pipeline(vlm)
-        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 1, tzinfo=UTC)
 
         obs, _, _ = await pipeline.process(FRAME, 0, now=start, force_vlm=True)
 
@@ -126,7 +126,7 @@ def test_object_change_respects_min_trigger_gap() -> None:
         vlm = CountingVLM()
         settings = VLMSettings(provider="mock", interval_seconds=100.0, min_trigger_gap_seconds=1.0, failure_backoff_seconds=5.0)
         pipeline, detector = make_pipeline(vlm, vlm_settings=settings)
-        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 1, tzinfo=UTC)
 
         # Initial frame always triggers (last_vlm_at is None).
         await pipeline.process(FRAME, 0, now=start)
@@ -158,7 +158,7 @@ def test_failure_backoff_suppresses_auto_trigger_but_not_force_vlm() -> None:
         vlm = FailingVLM()
         settings = VLMSettings(provider="mock", interval_seconds=100.0, min_trigger_gap_seconds=0.1, failure_backoff_seconds=5.0)
         pipeline, detector = make_pipeline(vlm, vlm_settings=settings)
-        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 1, tzinfo=UTC)
 
         await pipeline.process(FRAME, 0, now=start)
         await asyncio.sleep(0.01)

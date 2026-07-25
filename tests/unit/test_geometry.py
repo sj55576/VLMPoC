@@ -1,5 +1,12 @@
-from app.vision.geometry import calculate_joint_angle, distance, inside_region, iou, normalized_distance
+from app.vision.geometry import (
+    calculate_joint_angle,
+    distance,
+    inside_region,
+    iou,
+    normalized_distance,
+)
 from app.vision.models import Keypoint
+
 
 def test_iou_and_distance():
     assert iou((0,0,2,2),(1,1,3,3)) == 1/7

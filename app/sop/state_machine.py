@@ -1,6 +1,8 @@
 """Monotonic step state machine with duration and timeout semantics."""
 from __future__ import annotations
+
 from datetime import datetime
+
 from .models import ConditionResult, SOPDefinition, StepRuntime, StepStatus
 
 

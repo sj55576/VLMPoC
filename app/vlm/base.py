@@ -1,7 +1,9 @@
 """VLM provider interface and factory."""
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
 from .schemas import VLMResponse
 
 if TYPE_CHECKING:
@@ -13,7 +15,7 @@ class VLMProvider(ABC):
     async def analyze(self, images: list[Any], observation: dict[str, Any], sop_context: dict[str, Any]) -> VLMResponse: ...
 
 
-def create_vlm_provider(settings: "VLMSettings") -> VLMProvider:
+def create_vlm_provider(settings: VLMSettings) -> VLMProvider:
     if settings.provider == "mock":
         from .mock_provider import MockVLMProvider
         return MockVLMProvider()

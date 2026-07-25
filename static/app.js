@@ -7,11 +7,20 @@ camera.autoplay = true; camera.muted = true; camera.playsInline = true;
 
 const state = {
   running: false, stream: null, requestInFlight: false, socket: null, reconnectTimer: null,
-  pollingTimer: null, frameTimer: null, wsConnected: false, session: null, steps: [],
+  pollingTimer: null, frameTimer: null, statusTimer: null, wsConnected: false, session: null, steps: [],
   progress: 0, events: [], vlmCalls: 0, lastFrame: null, lastVlmTimestamp: null,
-  previewUrl: null, source: "待機中", sopEnabled: true,
+  previewUrl: null, source: "待機中", sopEnabled: true, sessions: [], viewingSessionId: null,
 };
 const SKELETON = [["nose","left_shoulder"],["nose","right_shoulder"],["left_shoulder","right_shoulder"],["left_shoulder","left_elbow"],["left_elbow","left_wrist"],["right_shoulder","right_elbow"],["right_elbow","right_wrist"],["left_shoulder","left_hip"],["right_shoulder","right_hip"],["left_hip","right_hip"],["left_hip","left_knee"],["left_knee","left_ankle"],["right_hip","right_knee"],["right_knee","right_ankle"]];
+// Server-side sources (server_camera/file/rtsp) are ingested by the server itself; the browser
+// only ever opens its own webcam for "browser" (and its legacy aliases camera/video).
+const SOURCE_TYPE_LABELS = {mock:"モック", browser:"ブラウザカメラ", server_camera:"サーバーカメラ", camera:"サーバーカメラ", file:"動画ファイル", rtsp:"RTSPストリーム"};
+const SOURCE_URI_HINTS = {
+  server_camera: "デバイス番号（例: 0）。空欄なら0を使用します。",
+  file: "data/ ディレクトリ内の相対パス（例: sample_assembly.mp4）。",
+  rtsp: "rtsp:// / rtsps:// / http(s):// で始まるURL。",
+};
+function sourceLabel(value) { return SOURCE_TYPE_LABELS[value] || text(value); }
 
 function text(value, fallback = "—") { return value === undefined || value === null || value === "" ? fallback : String(value); }
 function escapeHtml(value) { const node = document.createElement("span"); node.textContent = text(value, ""); return node.innerHTML; }
@@ -20,7 +29,12 @@ function isSocketOpen() { return state.socket && state.socket.readyState === Web
 
 async function call(path, options = {}) {
   const response = await fetch(path, options);
-  if (!response.ok) throw new Error(await response.text() || `${response.status} ${response.statusText}`);
+  if (!response.ok) {
+    const raw = await response.text();
+    let message = raw || `${response.status} ${response.statusText}`;
+    try { const body = JSON.parse(raw); if (body && body.detail) message = body.detail; } catch { /* not JSON, keep raw text */ }
+    throw new Error(message);
+  }
   return response.json();
 }
 function setNotice(message, isError = false) {
@@ -32,9 +46,15 @@ function setConnection(connected, label) {
   $("connection-status").textContent = label;
 }
 function updateButtons() {
-  $("start").disabled = state.running;
+  const active = Boolean(state.session && state.session.status === "RUNNING");
+  $("start").disabled = active;
   $("pause").disabled = !state.running;
-  $("stop").disabled = !state.session || state.session.status === "STOPPED";
+  $("stop").disabled = !active;
+}
+function updateSourceUriField() {
+  const type = $("source-type").value;
+  $("source-uri-field").classList.toggle("hidden", type === "browser");
+  $("source-uri").placeholder = SOURCE_URI_HINTS[type] || "";
 }
 function setSopEnabled(enabled) {
   state.sopEnabled = enabled;
@@ -102,8 +122,37 @@ function renderEvents(events) {
     const severity = String(event.severity || "").toLowerCase();
     const evidence = event.evidence || event.evidence_json;
     const evidenceText = typeof evidence === "string" ? evidence : evidence ? JSON.stringify(evidence) : "";
-    return `<article class="event ${severity}"><div class="event-head"><span class="event-type">${escapeHtml(event.event_type || "event")}</span><span class="event-time">${timestamp(event.timestamp)}</span></div><p class="event-message">${escapeHtml(event.message || event.reason || "詳細なし")}</p>${evidenceText ? `<p class="event-evidence">根拠: ${escapeHtml(evidenceText)}</p>` : ""}</article>`;
+    const frameUrl = event.frame_path && event.id !== undefined ? `/api/events/${event.id}/frame` : null;
+    const thumb = frameUrl ? `<a class="event-frame" href="${frameUrl}" target="_blank" rel="noopener"><img src="${frameUrl}" alt="証拠フレーム" loading="lazy"></a>` : "";
+    return `<article class="event ${severity}">${thumb}<div class="event-body"><div class="event-head"><span class="event-type">${escapeHtml(event.event_type || "event")}</span><span class="event-time">${timestamp(event.timestamp)}</span></div><p class="event-message">${escapeHtml(event.message || event.reason || "詳細なし")}</p>${evidenceText ? `<p class="event-evidence">根拠: ${escapeHtml(evidenceText)}</p>` : ""}</div></article>`;
   }).join("") : '<p class="muted">イベントはまだありません。</p>';
+}
+function renderSource(source) {
+  const panel = $("source-status");
+  if (!source) { panel.classList.add("hidden"); $("source-error").classList.add("hidden"); return; }
+  panel.classList.remove("hidden");
+  $("source-type-label").textContent = sourceLabel(source.type);
+  if (source.opened === undefined && source.finished === undefined) {
+    // Browser-pushed frames have no server-side capture stats to show.
+    $("source-state").textContent = source.type === "browser" ? "ブラウザ配信中" : "—";
+    $("source-frames-read").textContent = "—"; $("source-frames-dropped").textContent = "—"; $("source-reconnects").textContent = "—";
+  } else {
+    $("source-state").textContent = source.finished ? "終了" : source.opened ? "接続中" : "未接続";
+    $("source-frames-read").textContent = text(source.frames_read, "0");
+    $("source-frames-dropped").textContent = text(source.frames_dropped, "0");
+    $("source-reconnects").textContent = text(source.reconnects, "0");
+  }
+  const error = source.error || source.last_error;
+  const errorNode = $("source-error");
+  if (error) { errorNode.textContent = `ソースエラー: ${error}`; errorNode.classList.remove("hidden"); }
+  else { errorNode.textContent = ""; errorNode.classList.add("hidden"); }
+}
+function renderSessions(sessions) {
+  if (sessions) state.sessions = sessions;
+  $("sessions").innerHTML = state.sessions.length ? state.sessions.map((session) => {
+    const active = session.id === state.viewingSessionId;
+    return `<button type="button" class="event session-row${active ? " active" : ""}" data-session-id="${escapeHtml(session.id)}" aria-pressed="${active}"><div class="event-body"><div class="event-head"><span class="event-type">${escapeHtml(String(session.id || "").slice(0, 8))}</span><span class="event-time">${timestamp(session.started_at)}</span></div><p class="event-message">${escapeHtml(sourceLabel(session.source_type))} · ${escapeHtml(session.status)} · ${text(session.event_count, 0)} 件</p></div></button>`;
+  }).join("") : '<p class="muted">セッション履歴はまだありません。</p>';
 }
 function renderMetrics(data) {
   $("metric-fps").textContent = data.fps !== undefined ? `${data.fps} fps` : "—";
@@ -121,7 +170,9 @@ function handleFrame(data, source = "websocket") {
   state.lastFrame = data; state.source = source === "websocket" ? "ライブ" : "HTTP";
   $("source-badge").textContent = state.source;
   $("canvas-empty").classList.add("hidden"); draw(data); renderCurrentStep(data.current_step, data.condition);
-  if (data.recent_events) renderEvents(data.recent_events); if (data.vlm_result) renderVlm(data.vlm_result);
+  // A user browsing session history owns the event list until they return to live events.
+  if (data.recent_events && !state.viewingSessionId) renderEvents(data.recent_events);
+  if (data.vlm_result) renderVlm(data.vlm_result);
   if (data.activity !== undefined) renderActivity(data.activity);
   if (data.vlm_calls !== undefined) state.vlmCalls = data.vlm_calls;
   else if (data.vlm_result && data.timestamp !== state.lastVlmTimestamp) {
@@ -131,7 +182,9 @@ function handleFrame(data, source = "websocket") {
 }
 function applyStatus(data) {
   state.session = data.session || null; state.steps = data.steps || []; state.vlmCalls = data.vlm_calls ?? state.vlmCalls;
-  renderProgress(data.progress); renderSteps(); renderCurrentStep(data.current_step, state.lastFrame?.condition); updateButtons();
+  renderProgress(data.progress); renderSteps(); renderCurrentStep(data.current_step, state.lastFrame?.condition);
+  $("metric-frames").textContent = text(data.frames_processed, "0");
+  renderSource(data.source); updateButtons();
 }
 
 function stopPolling() { if (state.pollingTimer) clearInterval(state.pollingTimer); state.pollingTimer = null; }
@@ -168,19 +221,48 @@ async function sendCameraFrame() {
   } catch (error) { state.running = false; stopCamera(); setNotice(`カメラエラー: ${error.message}`, true); updateButtons(); }
   finally { state.requestInFlight = false; scheduleFrame(); }
 }
-async function startSession(sourceType, sourceName) {
+async function startSession(sourceType, sourceName, sourceUri) {
   const payload = {source_type:sourceType, source_name:sourceName};
+  if (sourceUri) payload.source_uri = sourceUri;
   if (state.sopEnabled) payload.sop_id = $("sop").value;
   const data = await call("/api/session/start", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)}); applyStatus(data); return data;
 }
+async function loadSessions() {
+  try { renderSessions(await call("/api/sessions?limit=20")); }
+  catch (error) { setNotice(`セッション履歴を取得できません: ${error.message}`, true); }
+}
+async function viewSessionEvents(sessionId) {
+  try {
+    const events = await call(`/api/sessions/${sessionId}/events?limit=100`);
+    state.viewingSessionId = sessionId; renderEvents(events); renderSessions();
+    $("live-events").classList.remove("hidden");
+    const scope = $("events-scope"); scope.textContent = `セッション ${sessionId.slice(0, 8)} のイベントを表示中`; scope.classList.remove("hidden");
+  } catch (error) { setNotice(`イベントを取得できません: ${error.message}`, true); }
+}
+function clearSessionView() {
+  state.viewingSessionId = null; renderSessions();
+  $("live-events").classList.add("hidden"); $("events-scope").classList.add("hidden");
+}
+function returnToLiveEvents() { clearSessionView(); refreshFallback(); }
 
 $("start").addEventListener("click", async () => {
-  try { state.stream = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480}}, audio:false}); camera.srcObject = state.stream; await camera.play(); await startSession("camera", "browser camera"); state.running = true; setNotice("カメラを解析中です。WebSocketで結果を受信します。"); updateButtons(); sendCameraFrame(); }
-  catch (error) { stopCamera(); setNotice(`カメラを開始できません: ${error.message}`, true); }
+  const sourceType = $("source-type").value;
+  if (sourceType === "browser") {
+    try { state.stream = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480}}, audio:false}); camera.srcObject = state.stream; await camera.play(); await startSession("browser", "browser camera"); state.running = true; setNotice("カメラを解析中です。WebSocketで結果を受信します。"); updateButtons(); sendCameraFrame(); loadSessions(); }
+    catch (error) { stopCamera(); setNotice(`カメラを開始できません: ${error.message}`, true); }
+    return;
+  }
+  // Server-side sources are ingested by the server; the browser must not open its own webcam
+  // or push frames — results arrive over the existing websocket stream.
+  const uri = $("source-uri").value.trim();
+  try { setNotice("ソースを開始しています…"); await startSession(sourceType, sourceLabel(sourceType), uri || undefined); setNotice("サーバー側でソースを解析しています。WebSocketで結果を受信します。"); loadSessions(); }
+  catch (error) { setNotice(`開始できません: ${error.message}`, true); }
+  updateButtons();
 });
+$("source-type").addEventListener("change", updateSourceUriField);
 $("pause").addEventListener("click", () => { state.running = false; stopCamera(); setNotice("カメラ解析を一時停止しました。"); updateButtons(); });
-$("stop").addEventListener("click", async () => { state.running = false; stopCamera(); try { applyStatus(await call("/api/session/stop", {method:"POST"})); setNotice("セッションを停止しました。"); } catch (error) { setNotice(`停止できません: ${error.message}`, true); } updateButtons(); });
-$("reset").addEventListener("click", async () => { state.running = false; stopCamera(); try { await call("/api/session/stop", {method:"POST"}); state.lastFrame = null; renderEvents([]); await startSession("mock", "dashboard reset"); setNotice("セッションをリセットしました。カメラまたは動画を開始できます。"); } catch (error) { setNotice(`リセットできません: ${error.message}`, true); } updateButtons(); });
+$("stop").addEventListener("click", async () => { state.running = false; stopCamera(); try { applyStatus(await call("/api/session/stop", {method:"POST"})); setNotice("セッションを停止しました。"); } catch (error) { setNotice(`停止できません: ${error.message}`, true); } updateButtons(); loadSessions(); });
+$("reset").addEventListener("click", async () => { state.running = false; stopCamera(); try { await call("/api/session/stop", {method:"POST"}); state.lastFrame = null; clearSessionView(); renderEvents([]); await startSession("mock", "dashboard reset"); setNotice("セッションをリセットしました。カメラまたは動画を開始できます。"); loadSessions(); } catch (error) { setNotice(`リセットできません: ${error.message}`, true); } updateButtons(); });
 $("vlm").addEventListener("click", async () => { try { $("vlm").disabled = true; const result = await call("/api/vlm/analyze", {method:"POST"}); handleFrame(result, "http"); await refreshFallback(); setNotice("VLMを手動実行しました。"); } catch (error) { setNotice(`VLM解析に失敗しました: ${error.message}`, true); } finally { $("vlm").disabled = false; } });
 $("upload").addEventListener("click", () => $("video").click());
 $("video").addEventListener("change", async (event) => {
@@ -188,14 +270,31 @@ $("video").addEventListener("change", async (event) => {
   try {
     state.previewUrl = URL.createObjectURL(file); camera.src = state.previewUrl; camera.load();
     await camera.play().catch(() => undefined);
-    setNotice(`${file.name} をアップロード・解析中…`); await startSession("video", file.name);
+    setNotice(`${file.name} をアップロード・解析中…`); await startSession("browser", file.name);
     const form = new FormData(); form.append("file", file); const result = await call("/api/analyze/video", {method:"POST", body:form});
-    handleFrame(result.last, "http"); await refreshFallback(); setNotice(`${file.name}: ${result.frames_processed} フレームを解析しました。`);
+    handleFrame(result.last, "http"); await refreshFallback(); setNotice(`${file.name}: ${result.frames_processed} フレームを解析しました。`); loadSessions();
   }
   catch (error) { setNotice(`動画を解析できません: ${error.message}`, true); }
   finally { event.target.value = ""; updateButtons(); }
 });
-$("refresh-events").addEventListener("click", refreshFallback);
-window.addEventListener("beforeunload", () => { stopCamera(); clearTimeout(state.reconnectTimer); stopPolling(); state.socket?.close(); });
+$("refresh-events").addEventListener("click", () => state.viewingSessionId ? viewSessionEvents(state.viewingSessionId) : refreshFallback());
+$("live-events").addEventListener("click", returnToLiveEvents);
+$("refresh-sessions").addEventListener("click", loadSessions);
+$("sessions").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-session-id]"); if (!button) return;
+  viewSessionEvents(button.dataset.sessionId);
+});
+window.addEventListener("beforeunload", () => { stopCamera(); clearTimeout(state.reconnectTimer); stopPolling(); if (state.statusTimer) clearInterval(state.statusTimer); state.socket?.close(); });
 
-(async () => { connectWebSocket(); try { const [config, sops, status, events] = await Promise.all([call("/api/config"), call("/api/sops"), call("/api/session/status"), call("/api/events")]); setSopEnabled(config.sop?.enabled !== false); $("sop").innerHTML = sops.map((sop) => `<option value="${escapeHtml(sop.id)}">${escapeHtml(sop.name)} (${escapeHtml(sop.version)})</option>`).join("") || $("sop").innerHTML; applyStatus(status); renderEvents(events); } catch (error) { setNotice(`初期情報を取得できません: ${error.message}`, true); startPolling(); } updateButtons(); })();
+(async () => {
+  connectWebSocket(); updateSourceUriField();
+  // Independent of the websocket/polling fallback: source and frame counters are only carried
+  // by /api/session/status, never by the frame_result payload, so they need their own refresh.
+  state.statusTimer = setInterval(() => { call("/api/session/status").then(applyStatus).catch(() => undefined); }, 4000);
+  try {
+    const [config, sops, status, events] = await Promise.all([call("/api/config"), call("/api/sops"), call("/api/session/status"), call("/api/events")]);
+    setSopEnabled(config.sop?.enabled !== false); $("sop").innerHTML = sops.map((sop) => `<option value="${escapeHtml(sop.id)}">${escapeHtml(sop.name)} (${escapeHtml(sop.version)})</option>`).join("") || $("sop").innerHTML;
+    applyStatus(status); renderEvents(events);
+  } catch (error) { setNotice(`初期情報を取得できません: ${error.message}`, true); startPolling(); }
+  loadSessions(); updateButtons();
+})();

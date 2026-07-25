@@ -1,6 +1,8 @@
 """SOP YAML loader with basic graph validation."""
 from pathlib import Path
+
 import yaml
+
 from .models import SOPDefinition
 
 

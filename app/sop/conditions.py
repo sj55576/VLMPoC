@@ -1,14 +1,18 @@
 """Recursive SOP condition evaluator with evidence-rich leaf results."""
 from __future__ import annotations
+
 from typing import Any
+
 from app.vision.geometry import calculate_joint_angle, distance, inside_region
 from app.vision.models import Observation
+
 from .models import ConditionResult
 
 
 class ConditionEvaluator:
-    def __init__(self, regions: dict[str, dict[str, float]]) -> None:
+    def __init__(self, regions: dict[str, dict[str, float]], vlm_max_result_age_seconds: float = 15.0) -> None:
         self.regions = regions
+        self.vlm_max_result_age_seconds = vlm_max_result_age_seconds
 
     def evaluate(self, expression: dict[str, Any], observation: Observation, completed_steps: set[str]) -> ConditionResult:
         """Evaluate all/any/not recursively, or a supported leaf condition."""
@@ -86,8 +90,14 @@ class ConditionEvaluator:
             result = obs.vlm_result or {}; status = result.get("step_status", "UNKNOWN")
             expected_step = c.get("step_id")
             step_matches = expected_step is None or result.get("current_step_id") in {None, expected_step}
-            passed = status in {"IN_PROGRESS", "COMPLETED"} and step_matches and result.get("confidence", 0) >= c.get("min_confidence", .5)
-            return self._result(c, passed, float(result.get("confidence", 0)), result.get("scene_summary", "VLM unavailable"), {"vlm": result})
+            # A VLM verdict is cached between calls; without an age bound a single stale
+            # confirmation could keep completing steps long after the scene changed.
+            max_age = float(c.get("max_age_seconds", self.vlm_max_result_age_seconds))
+            age = obs.vlm_result_age_seconds
+            stale = bool(result) and max_age > 0 and age is not None and age > max_age
+            passed = not stale and status in {"IN_PROGRESS", "COMPLETED"} and step_matches and result.get("confidence", 0) >= c.get("min_confidence", .5)
+            reason = f"VLM result is stale ({age:.1f}s > {max_age:.1f}s)" if stale else result.get("scene_summary", "VLM unavailable")
+            return self._result(c, passed, 0.0 if stale else float(result.get("confidence", 0)), reason, {"vlm": result, "age_seconds": age, "stale": stale})
         raise ValueError(f"Unsupported condition type: {type_}")
 
     def _near_objects(self, c: dict[str, Any], obs: Observation, left_name: str, right_name: str) -> ConditionResult:

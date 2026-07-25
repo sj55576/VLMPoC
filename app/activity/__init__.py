@@ -2,4 +2,4 @@
 from .estimator import ActivityEstimator
 from .models import ActivityEstimate, ActivityLabel
 
-__all__ = ["ActivityEstimator", "ActivityEstimate", "ActivityLabel"]
+__all__ = ["ActivityEstimate", "ActivityEstimator", "ActivityLabel"]

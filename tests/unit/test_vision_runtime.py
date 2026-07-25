@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pytest
@@ -55,7 +55,7 @@ def test_mock_boxes_follow_frame_size() -> None:
 
 def test_tracker_preserves_identity_and_reports_motion() -> None:
     tracker = IoUTracker(threshold=0.2, max_age_seconds=2.0, history_size=2)
-    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    start = datetime(2026, 1, 1, tzinfo=UTC)
     first = tracker.update([Detection(class_name="part_a", confidence=0.9, bbox=(0, 0, 10, 10))], start)
     second = tracker.update([Detection(class_name="part_a", confidence=0.9, bbox=(2, 0, 12, 10))], start + timedelta(seconds=1))
 
@@ -68,7 +68,7 @@ def test_tracker_preserves_identity_and_reports_motion() -> None:
 
 def test_tracker_rejects_invalid_boxes_and_expires_missing_tracks() -> None:
     tracker = IoUTracker(max_age_seconds=1.0)
-    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    start = datetime(2026, 1, 1, tzinfo=UTC)
     assert tracker.update([Detection(class_name="part_a", confidence=0.9, bbox=(1, 1, 1, 2))], start) == []
     tracker.update([Detection(class_name="part_a", confidence=0.9, bbox=(0, 0, 10, 10))], start)
     tracker.update([], start + timedelta(seconds=0.5))

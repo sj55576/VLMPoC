@@ -1,7 +1,9 @@
 """Common detector, pose, and observation models."""
 from __future__ import annotations
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -27,7 +29,7 @@ class Pose(BaseModel):
 
 
 class Observation(BaseModel):
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     frame_id: int = 0
     width: int = 1
     height: int = 1
@@ -35,6 +37,7 @@ class Observation(BaseModel):
     poses: list[Pose] = Field(default_factory=list)
     candidate_events: list[str] = Field(default_factory=list)
     vlm_result: dict[str, Any] | None = None
+    vlm_result_age_seconds: float | None = None
 
     def normalized_bbox(self, det: Detection) -> list[float]:
         return [det.bbox[0] / self.width, det.bbox[1] / self.height, det.bbox[2] / self.width, det.bbox[3] / self.height]
