@@ -37,6 +37,7 @@ class Observation(BaseModel):
     poses: list[Pose] = Field(default_factory=list)
     candidate_events: list[str] = Field(default_factory=list)
     vlm_result: dict[str, Any] | None = None
+    vlm_result_age_seconds: float | None = None
 
     def normalized_bbox(self, det: Detection) -> list[float]:
         return [det.bbox[0] / self.width, det.bbox[1] / self.height, det.bbox[2] / self.width, det.bbox[3] / self.height]

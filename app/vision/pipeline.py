@@ -30,6 +30,7 @@ class VisionPipeline:
         self.last_vlm_latency_ms: float = 0.0
         self.last_vlm: dict[str, Any] | None = None
         self.last_vlm_request: dict[str, Any] | None = None
+        self.last_vlm_result_at: datetime | None = None
         self.base_time = datetime.now(UTC)
         self.activity_enabled = activity_enabled
         self.sop_enabled = sop_enabled
@@ -105,6 +106,7 @@ class VisionPipeline:
 
     def _apply_result(self, request: dict[str, Any], response: VLMResponse, latency_ms: float) -> None:
         self.last_vlm = response.model_dump()
+        self.last_vlm_result_at = self.last_vlm_at
         self.last_vlm_latency_ms = latency_ms
         self.last_vlm_request = request
         self.vlm_calls += 1
@@ -134,6 +136,12 @@ class VisionPipeline:
         except Exception as exc:
             self._record_failure(request, exc)
 
+    def vlm_result_age(self, now: datetime) -> float | None:
+        """Seconds since the cached VLM verdict was requested, or None when there is none."""
+        if self.last_vlm is None or self.last_vlm_result_at is None:
+            return None
+        return max(0.0, (now - self.last_vlm_result_at).total_seconds())
+
     def _should_trigger(self, candidate: set[str], prior: set[str], now: datetime) -> bool:
         if self._vlm_task is not None and not self._vlm_task.done():
             return False
@@ -154,7 +162,7 @@ class VisionPipeline:
         if not self.sop_enabled:
             detections = [detection for detection in detections if detection.class_name == "person"]
         objects = self.tracker.update(detections, now)
-        obs = Observation(timestamp=now, frame_id=frame_id, width=frame.shape[1], height=frame.shape[0], objects=objects, poses=self.pose.estimate(frame, frame_id), vlm_result=self.last_vlm)
+        obs = Observation(timestamp=now, frame_id=frame_id, width=frame.shape[1], height=frame.shape[0], objects=objects, poses=self.pose.estimate(frame, frame_id), vlm_result=self.last_vlm, vlm_result_age_seconds=self.vlm_result_age(now))
         self.last_activity = self.activity.update(obs, now) if self.activity_enabled else None
         candidate = {x.class_name for x in objects}
         prior = {x.class_name for x in self.history[-1].objects} if self.history else set()
@@ -169,7 +177,7 @@ class VisionPipeline:
                 self._apply_result(request, response, latency_ms)
             except Exception as exc:
                 self._record_failure(request, exc)
-            obs.vlm_result = self.last_vlm
+            obs.vlm_result = self.last_vlm; obs.vlm_result_age_seconds = self.vlm_result_age(now)
         elif self._should_trigger(candidate, prior, now):
             request = self._build_request(obs, objects, candidate, prior, now)
             self.last_vlm_at = now
