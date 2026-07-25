@@ -305,12 +305,13 @@ class SessionService:
         await self.broadcast(payload); return payload
 
     async def broadcast(self, payload: dict[str, Any]) -> None:
+        # Snapshot both sets: a client disconnecting mid-broadcast mutates them.
         stale = []
-        for ws in self.subscribers:
+        for ws in list(self.subscribers):
             try: await ws.send_json(payload)
             except Exception: stale.append(ws)
         for ws in stale: self.subscribers.discard(ws)
-        for queue in self.stream_subscribers:
+        for queue in list(self.stream_subscribers):
             if queue.full():
                 with contextlib.suppress(asyncio.QueueEmpty): queue.get_nowait()
             queue.put_nowait(payload)
