@@ -77,13 +77,17 @@ def render_metrics(snapshot: dict[str, Any]) -> str:
             _header(lines, metric_name, "gauge", help_text)
             lines.append(f"{metric_name} {_fmt(snapshot[key])}")
 
-    events_total_present = "events_total" in snapshot
-    events_by_type = snapshot.get("events_by_type") or {}
-    if events_total_present or events_by_type:
+    if "events_total" in snapshot:
         name = f"{_PREFIX}events_total"
         _header(lines, name, "counter", "Total number of SOP/activity events recorded.")
-        if events_total_present:
-            lines.append(f"{name} {_fmt(snapshot['events_total'])}")
+        lines.append(f"{name} {_fmt(snapshot['events_total'])}")
+
+    events_by_type = snapshot.get("events_by_type") or {}
+    if events_by_type:
+        # A separate family: an unlabelled sample and labelled samples sharing one metric
+        # name would be double-counted by any sum() over the series.
+        name = f"{_PREFIX}events_by_type"
+        _header(lines, name, "counter", "Total number of events by event type.")
         for key in sorted(events_by_type):
             lines.append(f'{name}{{event_type="{_escape(str(key))}"}} {_fmt(events_by_type[key])}')
 

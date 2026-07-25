@@ -109,6 +109,9 @@ def test_api_key_protects_data_paths_but_not_health(monkeypatch):
         assert client.get("/api/config", headers={"X-API-Key": "s3cret"}).status_code == 200
         assert client.get("/api/config", headers={"Authorization": "Bearer s3cret"}).status_code == 200
         assert client.get("/metrics", headers={"X-API-Key": "s3cret"}).status_code == 200
+        assert client.get("/metrics").status_code == 401
+        # The dashboard shell must still load its own assets, or the page cannot render.
+        assert client.get("/static/app.js").status_code == 200
 
 
 def test_rate_limit_rejects_bursts(monkeypatch):

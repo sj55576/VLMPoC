@@ -30,7 +30,10 @@ class ApiKeyGuard:
         return bool(self._api_key)
 
     def is_exempt(self, path: str) -> bool:
-        return path in self._exempt_paths
+        """Exact match, or a prefix match so an entry like "/static" covers its subtree."""
+        if path in self._exempt_paths:
+            return True
+        return any(prefix != "/" and path.startswith(prefix.rstrip("/") + "/") for prefix in self._exempt_paths)
 
     def authorize(self, path: str, header_value: str | None, bearer_value: str | None = None) -> bool:
         """True when disabled, the path is exempt, or a supplied key matches (constant-time)."""

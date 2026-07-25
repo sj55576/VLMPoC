@@ -74,18 +74,19 @@ def test_gauges_are_unsuffixed() -> None:
 def test_events_by_type_labelled_family() -> None:
     text = render_metrics({"events_by_type": {"step_completed": 4, "sop_violation": 1}})
 
-    assert "# TYPE vlmsop_events_total counter" in text
-    assert 'vlmsop_events_total{event_type="sop_violation"} 1' in text
-    assert 'vlmsop_events_total{event_type="step_completed"} 4' in text
+    assert "# TYPE vlmsop_events_by_type counter" in text
+    assert 'vlmsop_events_by_type{event_type="sop_violation"} 1' in text
+    assert 'vlmsop_events_by_type{event_type="step_completed"} 4' in text
 
 
-def test_events_total_scalar_and_breakdown_share_one_family_block() -> None:
+def test_events_total_and_breakdown_are_separate_families() -> None:
     text = render_metrics({"events_total": 5, "events_by_type": {"step_completed": 5}})
 
-    # Only one HELP/TYPE header block for vlmsop_events_total.
+    # The scalar total must not share a metric name with the labelled breakdown.
     assert text.count("# TYPE vlmsop_events_total counter") == 1
     assert "vlmsop_events_total 5" in text
-    assert 'vlmsop_events_total{event_type="step_completed"} 5' in text
+    assert "vlmsop_events_total{" not in text
+    assert 'vlmsop_events_by_type{event_type="step_completed"} 5' in text
 
 
 def test_events_by_severity_labelled_family() -> None:
