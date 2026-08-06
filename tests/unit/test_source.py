@@ -16,6 +16,18 @@ from app.vision.source import (
 )
 
 
+def _decodable_frames(path) -> int:
+    """How many frames the encoder actually produced; it is not always what we wrote."""
+    import cv2
+
+    capture = cv2.VideoCapture(str(path))
+    count = 0
+    while capture.read()[0]:
+        count += 1
+    capture.release()
+    return count
+
+
 def _write_video(path, frames: int = 12) -> str:
     import cv2
 
@@ -25,6 +37,8 @@ def _write_video(path, frames: int = 12) -> str:
         frame[:, :, index % 3] = 255
         writer.write(frame)
     writer.release()
+    if _decodable_frames(path) == 0:
+        pytest.skip("this OpenCV build produced no decodable mp4v frames")
     return str(path)
 
 
@@ -74,6 +88,7 @@ def test_mock_source_produces_paced_frames():
 
 def test_file_source_reads_to_completion_then_reports_finished(tmp_path):
     path = _write_video(tmp_path / "clip.mp4", frames=8)
+    expected = _decodable_frames(path)
 
     async def run():
         # The buffer is larger than the clip, so nothing can be dropped and the
@@ -87,15 +102,16 @@ def test_file_source_reads_to_completion_then_reports_finished(tmp_path):
         return frames, source.stats
 
     frames, stats = asyncio.run(run())
-    assert len(frames) == 8
+    assert len(frames) == expected
     assert stats.finished is True
-    assert stats.frames_read == 8
+    assert stats.frames_read == expected
     assert stats.frames_dropped == 0
     assert stats.last_error is None
 
 
 def test_file_source_drops_frames_instead_of_growing_latency(tmp_path):
     path = _write_video(tmp_path / "clip.mp4", frames=40)
+    expected = _decodable_frames(path)
 
     async def run():
         source = OpenCVFrameSource(SourceSpec(type="file", uri=path, target_fps=0, queue_size=2))
@@ -107,7 +123,7 @@ def test_file_source_drops_frames_instead_of_growing_latency(tmp_path):
         return source.stats
 
     stats = asyncio.run(run())
-    assert stats.frames_read == 40
+    assert stats.frames_read == expected
     assert stats.frames_dropped > 0
 
 
@@ -139,3 +155,30 @@ def test_close_is_idempotent_and_stops_the_capture_thread(tmp_path):
     source = asyncio.run(run())
     assert source._thread is None
     assert source.stats.opened is False
+
+
+def test_finished_is_not_a_drain_signal(tmp_path):
+    """`finished` means the capture thread hit EOF, not that the consumer got the frames.
+
+    A buffer larger than the clip can hold every frame at the moment `finished` is set,
+    so waiting on it is not a valid completion signal for anything downstream.
+    """
+    path = _write_video(tmp_path / "clip.mp4", frames=10)
+    expected = _decodable_frames(path)
+
+    async def run():
+        source = OpenCVFrameSource(SourceSpec(type="file", uri=path, target_fps=0, queue_size=256))
+        await source.open()
+        while not source.stats.finished:  # deliberately consume nothing while capturing
+            await asyncio.sleep(0.01)
+        buffered = len(source._buffer)
+        delivered = 0
+        while await source.read() is not None:
+            delivered += 1
+        await source.close()
+        return buffered, delivered, source.stats
+
+    buffered, delivered, stats = asyncio.run(run())
+    assert stats.frames_read == expected
+    assert buffered == expected, "every frame is still queued when finished is set"
+    assert delivered == expected, "frames stay readable after the source reports finished"

@@ -148,10 +148,27 @@ def test_browser_source_types_stay_client_driven():
         assert status["source"]["type"] == "browser"
 
 
+def _decodable_frames(path: Path) -> int:
+    """How many frames the encoder actually produced; it is not always what we wrote."""
+    import cv2
+
+    capture = cv2.VideoCapture(str(path))
+    count = 0
+    while capture.read()[0]:
+        count += 1
+    capture.release()
+    return count
+
+
 @pytest.fixture
 def sample_clip(monkeypatch):
-    """A short video inside ./data, the only directory a file source may read from."""
+    """A short video inside ./data, the only directory a file source may read from.
+
+    The buffer is sized above the clip length so nothing is dropped: drop-oldest is
+    correct behaviour under load, but it would make the processed count timing-dependent.
+    """
     monkeypatch.setenv("SOURCE_TARGET_FPS", "500")
+    monkeypatch.setenv("SOURCE_QUEUE_SIZE", "256")
     import cv2
 
     data_dir = ROOT / "data"
@@ -163,42 +180,55 @@ def sample_clip(monkeypatch):
         frame[:, :, index % 3] = 255
         writer.write(frame)
     writer.release()
+    frames = _decodable_frames(clip)
+    if frames == 0:
+        Path(clip).unlink(missing_ok=True)
+        pytest.skip("this OpenCV build produced no decodable mp4v frames")
     try:
-        yield clip
+        yield clip, frames
     finally:
         Path(clip).unlink(missing_ok=True)
 
 
-def _await_ingestion(client: TestClient, started: dict, expected: int) -> dict:
-    deadline = time.time() + 10
+def _await_ingestion(client: TestClient, started: dict) -> dict:
+    """Poll until the session stops, which is the only signal that ingestion is complete.
+
+    `source.finished` means the capture thread hit end of file; with a buffer larger than
+    the clip it can be set while every frame is still queued and none has been analysed.
+    The runner stops the session only after `read()` drains the buffer and returns None.
+    """
+    deadline = time.time() + 30
     status = started
-    while time.time() < deadline and status["frames_processed"] < expected:
+    while time.time() < deadline and status["session"]["status"] == "RUNNING":
         time.sleep(0.05)
         status = client.get("/api/session/status").json()
     return status
 
 
 def test_server_side_file_source_ingests_frames(sample_clip):
+    clip, frames = sample_clip
     with TestClient(create_app()) as client:
-        started = client.post("/api/session/start", json={"source_type": "file", "source_uri": sample_clip.name})
+        started = client.post("/api/session/start", json={"source_type": "file", "source_uri": clip.name})
         assert started.status_code == 200, started.text
         assert started.json()["session"]["source_type"] == "file"
-        status = _await_ingestion(client, started.json(), 10)
-        assert status["frames_processed"] == 10
-        assert status["source"]["frames_read"] == 10
-        assert status["source"]["finished"] is True
+        status = _await_ingestion(client, started.json())
         assert status["session"]["status"] == "STOPPED"  # the runner stops at end of file
+        assert status["source"]["finished"] is True
+        assert status["source"]["frames_read"] == frames
+        assert status["source"]["frames_dropped"] == 0, "the buffer is larger than the clip"
+        assert status["frames_processed"] == frames
 
 
 def test_configured_source_is_used_when_the_request_omits_one(sample_clip, monkeypatch):
     """`source.type` in config is server-side, so it must not be aliased to the browser."""
+    clip, frames = sample_clip
     monkeypatch.setenv("SOURCE_TYPE", "file")
-    monkeypatch.setenv("SOURCE_URI", sample_clip.name)
+    monkeypatch.setenv("SOURCE_URI", clip.name)
     with TestClient(create_app()) as client:
         started = client.post("/api/session/start", json={})
         assert started.status_code == 200, started.text
         assert started.json()["session"]["source_type"] == "file"
-        assert _await_ingestion(client, started.json(), 10)["frames_processed"] == 10
+        assert _await_ingestion(client, started.json())["frames_processed"] == frames
 
 
 def test_mock_producer_starts_for_a_client_that_connected_first():
