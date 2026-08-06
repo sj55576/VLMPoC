@@ -1,0 +1,94 @@
+name: Implementation or Bug Report
+description: 実装・不具合対応に必要な情報を整理して登録します。
+title: "[Issue]: "
+labels:
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Secret、アクセストークン、個人情報、実運用データは記載しないでください。
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 目的
+      description: 解決したい課題、背景、利用者への価値を記載してください。
+      placeholder: "例: 管理者が失敗したジョブを再実行できるようにする。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-problem
+    attributes:
+      label: 現在の問題
+      description: 現在の挙動、困っていること、発生頻度を記載してください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: 再現手順
+      description: 不具合の場合は最小の再現手順、機能要望の場合は現状確認手順を記載してください。
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-result
+    attributes:
+      label: 期待する結果
+      description: 完了後にユーザーまたはシステムがどう振る舞うべきかを記載してください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: 完了条件
+      description: 確認可能な受け入れ条件をチェックリストで記載してください。
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: allowed-scope
+    attributes:
+      label: 変更可能な範囲
+      description: 変更してよい機能、ディレクトリ、設定を記載してください。
+      placeholder: "例: `src/jobs/` と関連テスト。API 互換の範囲内。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: prohibited-changes
+    attributes:
+      label: 変更禁止事項
+      description: 変更してはいけない領域・振る舞い・依存関係を記載してください。
+      placeholder: "例: DB スキーマ、認証方式、公開 API の破壊的変更は不可。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: test-method
+    attributes:
+      label: テスト方法
+      description: 必要な自動・手動テスト、期待結果、環境を記載してください。
+      placeholder: "例: `pnpm test` と失敗ケースの回帰テストを実行する。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: related-information
+    attributes:
+      label: 関連情報
+      description: 関連 Issue/PR、ログ（重要箇所だけ・マスク済み）、設計資料、スクリーンショットなどを記載してください。
+      placeholder: "関連: #123\nログ: <Secret を除いた要点>"
+    validations:
+      required: true
