@@ -155,3 +155,30 @@ def test_close_is_idempotent_and_stops_the_capture_thread(tmp_path):
     source = asyncio.run(run())
     assert source._thread is None
     assert source.stats.opened is False
+
+
+def test_finished_is_not_a_drain_signal(tmp_path):
+    """`finished` means the capture thread hit EOF, not that the consumer got the frames.
+
+    A buffer larger than the clip can hold every frame at the moment `finished` is set,
+    so waiting on it is not a valid completion signal for anything downstream.
+    """
+    path = _write_video(tmp_path / "clip.mp4", frames=10)
+    expected = _decodable_frames(path)
+
+    async def run():
+        source = OpenCVFrameSource(SourceSpec(type="file", uri=path, target_fps=0, queue_size=256))
+        await source.open()
+        while not source.stats.finished:  # deliberately consume nothing while capturing
+            await asyncio.sleep(0.01)
+        buffered = len(source._buffer)
+        delivered = 0
+        while await source.read() is not None:
+            delivered += 1
+        await source.close()
+        return buffered, delivered, source.stats
+
+    buffered, delivered, stats = asyncio.run(run())
+    assert stats.frames_read == expected
+    assert buffered == expected, "every frame is still queued when finished is set"
+    assert delivered == expected, "frames stay readable after the source reports finished"

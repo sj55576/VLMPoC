@@ -191,10 +191,15 @@ def sample_clip(monkeypatch):
 
 
 def _await_ingestion(client: TestClient, started: dict) -> dict:
-    """Poll until the source reports it finished, not until a frame count is reached."""
+    """Poll until the session stops, which is the only signal that ingestion is complete.
+
+    `source.finished` means the capture thread hit end of file; with a buffer larger than
+    the clip it can be set while every frame is still queued and none has been analysed.
+    The runner stops the session only after `read()` drains the buffer and returns None.
+    """
     deadline = time.time() + 30
     status = started
-    while time.time() < deadline and not status["source"].get("finished"):
+    while time.time() < deadline and status["session"]["status"] == "RUNNING":
         time.sleep(0.05)
         status = client.get("/api/session/status").json()
     return status
@@ -207,11 +212,11 @@ def test_server_side_file_source_ingests_frames(sample_clip):
         assert started.status_code == 200, started.text
         assert started.json()["session"]["source_type"] == "file"
         status = _await_ingestion(client, started.json())
+        assert status["session"]["status"] == "STOPPED"  # the runner stops at end of file
         assert status["source"]["finished"] is True
         assert status["source"]["frames_read"] == frames
         assert status["source"]["frames_dropped"] == 0, "the buffer is larger than the clip"
         assert status["frames_processed"] == frames
-        assert status["session"]["status"] == "STOPPED"  # the runner stops at end of file
 
 
 def test_configured_source_is_used_when_the_request_omits_one(sample_clip, monkeypatch):
