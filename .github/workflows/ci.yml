@@ -9,6 +9,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -25,6 +28,60 @@ jobs:
       - name: Install
         run: python -m pip install -e ".[dev]"
       - name: Lint
-        run: python -m ruff check app tests
+        run: set -o pipefail; python -m ruff check app tests 2>&1 | tee -a failed-ci.log
       - name: Test
-        run: python -m pytest -q
+        run: set -o pipefail; python -m pytest -q 2>&1 | tee -a failed-ci.log
+      # The AI Platform summary job needs the failing output as an artifact; jobs do not
+      # share files. Names are unique per matrix entry so parallel uploads cannot collide.
+      - name: Upload failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-ci-log-${{ matrix.python-version }}
+          path: failed-ci.log
+          if-no-files-found: ignore
+
+  collect-failure-log:
+    if: failure()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download failure logs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: failed-ci-log-*
+          path: logs
+        continue-on-error: true
+      # Either or both matrix entries may have failed; merge whatever arrived into the
+      # single artifact name the reusable workflow expects.
+      - name: Merge into one log
+        run: |
+          set -euo pipefail
+          : > failed-ci.log
+          for file in logs/*/failed-ci.log; do
+            [ -f "$file" ] || continue
+            printf '===== %s =====\n' "$(basename "$(dirname "$file")")" >> failed-ci.log
+            cat "$file" >> failed-ci.log
+          done
+          [ -s failed-ci.log ] || echo "No captured CI log was produced by the failing job." >> failed-ci.log
+      - name: Upload merged log
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-ci-log
+          path: failed-ci.log
+          if-no-files-found: error
+
+  summarize-failure:
+    if: failure()
+    needs: [collect-failure-log]
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: sj55576/ai-platform/.github/workflows/reusable-ci-summary.yml@main
+    with:
+      log_file: .ai-platform-failure-log/failed-ci.log
+      log_artifact_name: failed-ci-log
+      workflow_name: CI
+      run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      reproduce_command: python -m pip install -e ".[dev]" && python -m ruff check app tests && python -m pytest -q
+      comment_on_pr: true
