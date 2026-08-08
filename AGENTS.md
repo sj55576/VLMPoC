@@ -102,7 +102,7 @@
 | `.claude/commands/` | タスク別プロンプト（`/implement-issue`、`/fix-ci` ほか） |
 | `.github/pull_request_template.md`、`.github/ISSUE_TEMPLATE/ai-platform.yml` | PR / Issue テンプレート |
 
-適用元リビジョン: `b1f8e9457ac9f6a8bc990c1ad1237e6a904117de`。更新は `/sync-ai-platform sj55576/VLMPoC PR作成` で差分を確認します。下記マーカー区間だけが同期対象で、それ以外のプロジェクト固有の記述は上書きしません。
+適用元リビジョン: `4c2216b081f3900ac2dc2aadacf146f228a22e9d`。更新は `/sync-ai-platform sj55576/VLMPoC PR作成` で差分を確認します。下記マーカー区間だけが同期対象で、それ以外のプロジェクト固有の記述は上書きしません。
 
 <!-- AI-PLATFORM:START -->
 ## AI Platform 共通ルール（同期管理）
